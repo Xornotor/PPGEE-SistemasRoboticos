@@ -149,22 +149,29 @@ def dk_get_dh():
                  ])
     return dh
 
+# Montagem da matriz Ai
+def mount_ai_matrix(a, alpha, d, theta):
+    s_alp = np.sin(alpha)
+    c_alp = np.cos(alpha)
+    s_the = np.sin(theta)
+    c_the = np.cos(theta)
+    matrix = np.array([ [ c_the,    -s_the*c_alp,   s_the*s_alp,    a*c_the ],
+                        [ s_the,    c_the*c_alp,    -c_the*s_alp,   a*s_the ],
+                        [ 0,        s_alp,          c_alp,          d       ],
+                        [ 0,        0,              0,              1       ]])
+    return matrix
+
 # Matriz Ai
 def dk_get_ai(i):
     if i < 1 or i > 6:
         raise Exception('i deve estar entre 1 e 6')
     else:
         dh_line = dk_get_dh()[i-1]
-        ai = dh_line[0]
-        di = dh_line[2]
-        s_alp = np.sin(dh_line[1])
-        c_alp = np.cos(dh_line[1])
-        s_the = np.sin(dh_line[3])
-        c_the = np.cos(dh_line[3])
-        matrix = np.array([ [ c_the,    -s_the*c_alp,   s_the*s_alp,    ai*c_the ],
-                            [ s_the,    c_the*c_alp,    -c_the*s_alp,   ai*s_the ],
-                            [ 0,        s_alp,          c_alp,          di       ],
-                            [ 0,        0,              0,              1        ]])
+        a_i = dh_line[0]
+        alpha_i = dh_line[1]
+        d_i = dh_line[2]
+        theta_i = dh_line[3]
+        matrix = mount_ai_matrix(a_i, alpha_i, d_i, theta_i)
         return matrix
         
 # Matriz de transformacao completa
@@ -279,6 +286,54 @@ def ik_calculate(target_matrix):
     current_theta5 = dh[4, 3]
     if(current_theta5 < 0):
         theta5 *= -1
+    theta5 = wrap_angle(theta5)
+
+    # Calculo do Theta 6
+    T_6_0 = reverse_transformation_matrix(T_0_6)
+    X60x = T_6_0[0, 0]
+    X60y = T_6_0[1, 0]
+    Y60x = T_6_0[0, 1]
+    Y60y = T_6_0[1, 1]
+    current_theta6 = dh[5, 3]
+    if(np.sin(theta5) != 0):
+        atan2_first = ((-X60y*np.sin(theta1+np.pi/2))+(Y60y*np.cos(theta1+np.pi/2)))/np.sin(theta5)
+        atan2_second = ((X60x*np.sin(theta1+np.pi/2))-(Y60x*np.cos(theta1+np.pi/2)))/np.sin(theta5)
+        theta6 = np.atan2(atan2_first, atan2_second)
+    else:
+        theta6 = current_theta6
+    theta6 = wrap_angle(theta6)
+
+    # Calculo do Theta 3 (Corrigir)
+    a1 = dh[0, 0]
+    alpha1 = dh[0, 1]
+    d1 = dh[0, 2]
+    a5 = dh[4, 0]
+    alpha5 = dh[4, 1]
+    d5 = dh[4, 2]
+    T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5)
+    T_5_4 = reverse_transformation_matrix(T_4_5)
+    T_0_4 = np.matmul(T_0_5, T_5_4)
+    T_4_0 = reverse_transformation_matrix(T_0_4)
+    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1)
+    T_4_1 = np.matmul(T_4_0, T_0_1)
+    T_1_4 = reverse_transformation_matrix(T_4_1)
+    p14x = T_1_4[0, 3]
+    p14z = T_1_4[2, 3]
+    p14xz = np.sqrt(p14x**2 + p14z**2)
+    a2 = dh[1, 0]
+    a3 = dh[2, 0]
+    theta3 = np.acos((p14xz**2 - a2**2 - a3**2)/(2*a2*a3))
+    current_theta3 = dh[2, 3]
+    if(current_theta3 < 0):
+        theta3 *= -1
+    theta3 = wrap_angle(theta3)
+
+    # Calculo do Theta 2 (Correcao depende da correcao de Theta 3)
+    theta2 = np.atan2(-p14z, -p14x) - np.asin((-a3*np.sin(theta3))/p14xz)
+    theta2 = wrap_angle(theta2)
+
+    # Calculo de Theta 4
+    
 
     joint_values = np.array([theta1, theta2, theta3, theta4, theta5, theta6])
 
