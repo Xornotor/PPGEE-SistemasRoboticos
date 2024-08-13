@@ -18,7 +18,7 @@ from time import sleep
 #-----------------------------------------------#
 SIGNAL = True
 
-FLAG_DK = False # Flag que indica se a validacao da C.D. foi concluida
+FLAG_DK = True # Flag que indica se a validacao da C.D. foi concluida
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 
 # Array de casos de teste da C.D (J1, J2, J3, J4, J5, J6)
@@ -56,6 +56,10 @@ def sysCall_sensing():
         if(COUNTER_DK >= NUM_TESTES_DH):
             FLAG_DK = True
 
+    print(ik_calculate(dk_get_end_effector_matrix()))
+    print(read_joints_sensors())
+    print()
+
 # Atuacao step-by-step
 def sysCall_actuation():
     global SIGNAL
@@ -69,9 +73,9 @@ def sysCall_actuation():
             elif(orient < -np.pi/2):
                 SIGNAL = True
             if(SIGNAL):
-                orient += 0.005
+                orient += 0.01
             else:
-                orient -= 0.005
+                orient -= 0.01
             sim.setJointPosition(joint, orient)
 
 #-----------------------------------------------#
@@ -100,11 +104,15 @@ def read_joints_sensors():
 def wrap_angle(angle):
     return np.atan2(np.sin(angle),np.cos(angle))
 
+# Limita angulo entre 0 e 2pi
+def wrap_2pi(angle):
+    return (angle + (2*np.pi)) % (2*np.pi)
+
 # Gera matriz de transformacao reversa
 def reverse_transformation_matrix(matrix):
     rev_matrix = np.identity(4)
-    rev_matrix[:3, :3] = matrix[:3, :3].T
-    rev_matrix[:3, 3] = np.matmul(rev_matrix[:3, :3], matrix[:3, 3]) * (-1)
+    rev_matrix[:3, :3] = np.array(matrix)[:3, :3].T
+    rev_matrix[:3, 3] = np.matmul(rev_matrix[:3, :3], np.array(matrix)[:3, 3]) * (-1)
     return rev_matrix
 
 # Converte target_pose (X, Y, Z, R, P, Y) para matriz de transformacao
@@ -167,7 +175,7 @@ def dk_get_transformation_matrix():
     return t_matrix
 
 # Posicao da garra
-def dk_get_end_effector_pose():
+def dk_get_end_effector_matrix():
     base_matrix = sim.getObjectMatrix(sim.getObject("/UR5"))
     base_matrix = np.array([base_matrix[0:4],
                             base_matrix[4:8],
@@ -191,7 +199,7 @@ def dk_validate(test_cases, num_teste):
 
     for joint, value in zip(joints, test_cases[num_teste]):
         sim.setJointPosition(joint, value*np.pi/180.0)
-    end_pose = dk_get_end_effector_pose()
+    end_pose = dk_get_end_effector_matrix()
     end_ground = sim.getObjectPosition(end_effector)
     end_diff = [end_pose[0][3] - end_ground[0],
                 end_pose[1][3] - end_ground[1], 
@@ -233,16 +241,36 @@ def dk_validate(test_cases, num_teste):
 #--------Funcoes de Cinematica Inversa----------#
 #-----------------------------------------------#
 
-'''
-# Calcular Cinematica Inversa com base em target pose
-# Target: (X, Y, Z, R, P, Y)
-def ik_calculate(target_pose):
-    target_matrix = pose2matrix(target_pose)
+
+# Calcular Cinematica Inversa com base em target matrix
+def ik_calculate(target_matrix):
+    # Inicializacao das variaveis
+    theta1 = theta2 = theta3 = theta4 = theta5 = theta6 = 0
+
+    # Obtencao de informacoes para o calculo
+    dh = dk_get_dh()
     base_matrix = sim.getObjectMatrix(sim.getObject("/UR5"))
-    
-    t_0_6 = 
+    base_matrix = np.array([base_matrix[0:4],
+                            base_matrix[4:8],
+                            base_matrix[8:12],
+                            [0, 0, 0, 1]])
+    rev_base = reverse_transformation_matrix(base_matrix)
 
+    # Cálculo do Theta 1
+    T_0_6 = np.matmul(rev_base, target_matrix)
+    T_6_5 = reverse_transformation_matrix(dk_get_ai(6))
+    T_0_5 = np.matmul(T_0_6, T_6_5)
+    d3 = dh[2, 2]
+    p05x = T_0_5[0, 3]
+    p05y = T_0_5[1, 3]
+    theta1_sh_left = np.atan2(p05y, p05x) + np.acos(d3/np.sqrt(p05x**2 + p05y**2)) + np.pi
+    theta1_sh_right = np.atan2(p05y, p05x) - np.acos(d3/np.sqrt(p05x**2 + p05y**2)) + np.pi
+    current_theta2 = dh[1, 3]
+    if (current_theta2 + np.pi/2) >= 0: # Se o ombro estiver pra a esquerda:
+        theta1 = wrap_angle(theta1_sh_left)
+    else:
+        theta1 = wrap_angle(theta1_sh_right)
 
-    t_6_5 = reverse_transformation_matrix(dk_get_ai(6))
-    t_0_5
-'''
+    joint_values = [theta1, theta2, theta3, theta4, theta5, theta6]
+
+    return joint_values
