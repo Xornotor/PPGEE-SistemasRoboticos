@@ -18,7 +18,7 @@ from time import sleep
 #-----------------------------------------------#
 SIGNAL = True
 
-FLAG_DK = True # Flag que indica se a validacao da C.D. foi concluida
+FLAG_DK = False # Flag que indica se a validacao da C.D. foi concluida
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 
 # Array de casos de teste da C.D (J1, J2, J3, J4, J5, J6)
@@ -55,10 +55,6 @@ def sysCall_sensing():
         COUNTER_DK += 1
         if(COUNTER_DK >= NUM_TESTES_DH):
             FLAG_DK = True
-    
-    print(ik_get_all_theta())
-    print(read_joints_sensors())
-    print()
 
 # Atuacao step-by-step
 def sysCall_actuation():
@@ -104,6 +100,31 @@ def read_joints_sensors():
 def wrap_angle(angle):
     return np.atan2(np.sin(angle),np.cos(angle))
 
+# Gera matriz de transformacao reversa
+def reverse_transformation_matrix(matrix):
+    rev_matrix = np.identity(4)
+    rev_matrix[:3, :3] = matrix[:3, :3].T
+    rev_matrix[:3, 3] = np.matmul(rev_matrix[:3, :3], matrix[:3, 3]) * (-1)
+    return rev_matrix
+
+# Converte target_pose (X, Y, Z, R, P, Y) para matriz de transformacao
+def pose2matrix(target_pose):
+    roll = target_pose[3]
+    pitch = target_pose[4]
+    yaw = target_pose[5]
+
+    roll_matrix = np.array([[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]]) 
+    pitch_matrix = np.array([[np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-np.sin(pitch), 0, np.cos(pitch)]]) 
+    yaw_matrix = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
+
+    r_matrix = np.matmul(np.matmul(yaw_matrix, pitch_matrix), roll_matrix)
+
+    t_matrix = np.identity(4)
+    t_matrix[:3, :3] = r_matrix
+    for i in range(3):
+        t_matrix[i, 3] = target_pose[i]
+    return t_matrix
+
 #-----------------------------------------------#
 #---------Funcoes de Cinematica Direta----------#
 #-----------------------------------------------#
@@ -119,20 +140,6 @@ def dk_get_dh():
                     [    0,             0,          82.3e-3,   theta[5]            ], # A6
                  ])
     return dh
-    
-# Funcao auxiliar para montar matriz Ai
-def dk_mount_ai_matrix(dh_line):
-    ai = dh_line[0]
-    di = dh_line[2]
-    s_alp = np.sin(dh_line[1])
-    c_alp = np.cos(dh_line[1])
-    s_the = np.sin(dh_line[3])
-    c_the = np.cos(dh_line[3])
-    matrix = np.array([ [ c_the,    -s_the*c_alp,   s_the*s_alp,    ai*c_the ],
-                        [ s_the,    c_the*c_alp,    -c_the*s_alp,   ai*s_the ],
-                        [ 0,        s_alp,          c_alp,          di       ],
-                        [ 0,        0,              0,              1        ]])
-    return matrix
 
 # Matriz Ai
 def dk_get_ai(i):
@@ -140,7 +147,16 @@ def dk_get_ai(i):
         raise Exception('i deve estar entre 1 e 6')
     else:
         dh_line = dk_get_dh()[i-1]
-        matrix = dk_mount_ai_matrix(dh_line)
+        ai = dh_line[0]
+        di = dh_line[2]
+        s_alp = np.sin(dh_line[1])
+        c_alp = np.cos(dh_line[1])
+        s_the = np.sin(dh_line[3])
+        c_the = np.cos(dh_line[3])
+        matrix = np.array([ [ c_the,    -s_the*c_alp,   s_the*s_alp,    ai*c_the ],
+                            [ s_the,    c_the*c_alp,    -c_the*s_alp,   ai*s_the ],
+                            [ 0,        s_alp,          c_alp,          di       ],
+                            [ 0,        0,              0,              1        ]])
         return matrix
         
 # Matriz de transformacao completa
@@ -217,86 +233,16 @@ def dk_validate(test_cases, num_teste):
 #--------Funcoes de Cinematica Inversa----------#
 #-----------------------------------------------#
 
-def ik_get_all_theta():
-    return np.array ([
-                        ik_get_theta1(), ik_get_theta2(), ik_get_theta3(),
-                        ik_get_theta4(), ik_get_theta5(), ik_get_theta6(),
-                    ])
+'''
+# Calcular Cinematica Inversa com base em target pose
+# Target: (X, Y, Z, R, P, Y)
+def ik_calculate(target_pose):
+    target_matrix = pose2matrix(target_pose)
+    base_matrix = sim.getObjectMatrix(sim.getObject("/UR5"))
+    
+    t_0_6 = 
 
-# Theta 1 OK (?)
-def ik_get_theta1(shoulder_left = True):
-    dh = dk_get_dh()
-    wrist = np.identity(4)
-    for i in range(1, 6):
-        wrist = np.matmul(wrist, dk_get_ai(i))
-    p5x = wrist[0][3]
-    p5y = wrist[1][3]
-    d3 = dh[2][2]
-    if(shoulder_left):
-        theta1 = np.atan2(p5y, p5x) + np.acos(d3/np.sqrt(p5x**2 + p5y**2)) + np.pi
-    else:
-        theta1 = np.atan2(p5y, p5x) - np.acos(d3/np.sqrt(p5x**2 + p5y**2)) + np.pi
-    return wrap_angle(theta1)
 
-def ik_get_theta2():
-    dh = dk_get_dh()
-    elbow = np.identity(4)
-    for i in range(2, 5):
-        elbow = np.matmul(elbow, dk_get_ai(i))
-    p4x = elbow[0][3]
-    p4z = elbow[2][3]
-    p4xz = np.sqrt(p4x**2 + p4z**2)
-    a3 = dh[2][0]
-    theta3 = ik_get_theta3()
-    theta2 = np.atan2(-p4z, -p4x) - np.asin((-a3*np.sin(theta3))/p4xz) + np.pi/2
-    return wrap_angle(theta2)
-
-def ik_get_theta3(elbow_up = True):
-    dh = dk_get_dh()
-    elbow = np.identity(4)
-    for i in range(2, 5):
-        elbow = np.matmul(elbow, dk_get_ai(i))
-    p4xz = np.sqrt((elbow[0][3]**2) + (elbow[2][3]**2))
-    a2 = dh[1][0]
-    a3 = dh[2][0]
-    theta3 = wrap_angle(np.acos((p4xz**2 - a2**2 - a3**2)/(2*a2*a3)))
-    if(not elbow_up):
-        theta3 *= -1
-    return theta3
-
-# Theta 4 OK
-def ik_get_theta4():
-    t34 = dk_get_ai(4)
-    X4y = t34[1][0]
-    X4x = t34[0][0]
-    theta4 = wrap_angle(np.atan2(X4y, X4x) + np.pi/2)
-    return theta4
-
-# Theta 5 OK (?)
-def ik_get_theta5(wrist_up = True):
-    dh = dk_get_dh()
-    t_matrix = dk_get_transformation_matrix()
-    p6x = t_matrix[0][3]
-    p6y = t_matrix[1][3]
-    d3 = dh[2][2]
-    d6 = dh[5][2]
-    theta1 = ik_get_theta1() - np.pi/2
-    theta5 = wrap_angle(np.acos(((p6x*np.sin(theta1))-(p6y*np.cos(theta1))-d3)/d6))
-    if(not wrist_up):
-        theta5 *= -1
-    return theta5
-
-def ik_get_theta6():
-    t_inv_matrix = np.identity(4)
-    for i in range(6, 0, -1):
-        t_inv_matrix = np.matmul(t_inv_matrix, dk_get_ai(i))
-    X0x = t_inv_matrix[0][0]
-    X0y = t_inv_matrix[1][0]
-    Y0x = t_inv_matrix[0][1]
-    Y0y = t_inv_matrix[1][1]
-    theta1 = ik_get_theta1() - np.pi/2
-    theta5 = ik_get_theta5()
-    atan_first = (-X0y*np.sin(theta1) + Y0y*np.cos(theta1))/np.sin(theta5)
-    atan_second = (X0x*np.sin(theta1) - Y0x*np.cos(theta1))/np.sin(theta5)
-    theta6 = np.atan2(atan_first, atan_second)
-    return wrap_angle(theta6)
+    t_6_5 = reverse_transformation_matrix(dk_get_ai(6))
+    t_0_5
+'''
