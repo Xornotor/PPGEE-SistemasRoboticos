@@ -98,7 +98,7 @@ def read_joints_sensors():
     theta = []
     for joint in joints:
         theta.append(sim.getJointPosition(joint))
-    return theta
+    return np.array(theta)
 
 # Limita angulo entre -pi e pi
 def wrap_angle(angle):
@@ -256,7 +256,7 @@ def ik_calculate(target_matrix):
                             [0, 0, 0, 1]])
     rev_base = reverse_transformation_matrix(base_matrix)
 
-    # Cálculo do Theta 1
+    # Calculo do Theta 1
     T_0_6 = np.matmul(rev_base, target_matrix)
     T_6_5 = reverse_transformation_matrix(dk_get_ai(6))
     T_0_5 = np.matmul(T_0_6, T_6_5)
@@ -265,12 +265,21 @@ def ik_calculate(target_matrix):
     p05y = T_0_5[1, 3]
     theta1_sh_left = np.atan2(p05y, p05x) + np.acos(d3/np.sqrt(p05x**2 + p05y**2)) + np.pi
     theta1_sh_right = np.atan2(p05y, p05x) - np.acos(d3/np.sqrt(p05x**2 + p05y**2)) + np.pi
-    current_theta2 = dh[1, 3]
-    if (current_theta2 + np.pi/2) >= 0: # Se o ombro estiver pra a esquerda:
+    current_theta2 = dh[1, 3] + np.pi/2
+    if (current_theta2) >= 0: # Se o ombro estiver pra a esquerda:
         theta1 = wrap_angle(theta1_sh_left)
     else:
         theta1 = wrap_angle(theta1_sh_right)
 
-    joint_values = [theta1, theta2, theta3, theta4, theta5, theta6]
+    # Calculo do Theta 5
+    p06x = T_0_6[0, 3]
+    p06y = T_0_6[1, 3]
+    d6 = dh[5, 2]
+    theta5 = np.acos(((p06x*np.sin(theta1-np.pi/2))-(p06y*np.cos(theta1-np.pi/2))-d3)/d6)
+    current_theta5 = dh[4, 3]
+    if(current_theta5 < 0):
+        theta5 *= -1
+
+    joint_values = np.array([theta1, theta2, theta3, theta4, theta5, theta6])
 
     return joint_values
