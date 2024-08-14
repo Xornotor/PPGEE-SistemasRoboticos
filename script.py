@@ -140,7 +140,7 @@ def pose2matrix(target_pose):
 # Tabela DH (a, alpha, d, theta)
 def dk_get_dh():
     theta = read_joints_sensors()
-    dh = np.array([ [    0,             -np.pi/2,   89.16e-3,  theta[0] + np.pi/2  ], # A1
+    dh = np.array([ [    0,             -np.pi/2,   89.159e-3, theta[0] + np.pi/2  ], # A1
                     [    425e-3,        0,          0,         theta[1] - np.pi/2  ], # A2
                     [    392.25e-3,     0,          109.15e-3, theta[2]            ], # A3
                     [    0,             -np.pi/2,   0,         theta[3] - np.pi/2  ], # A4
@@ -303,33 +303,36 @@ def ik_calculate(target_matrix):
         theta6 = current_theta6
     theta6 = wrap_angle(theta6)
 
-    # Calculo do Theta 3 (Corrigir)
+    # Calculo do Theta 3
     a1 = dh[0, 0]
     alpha1 = dh[0, 1]
     d1 = dh[0, 2]
     a5 = dh[4, 0]
     alpha5 = dh[4, 1]
     d5 = dh[4, 2]
+    a6 = dh[5, 0]
+    alpha6 = dh[5, 1]
+    d6 = dh[5, 2]
     T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5)
-    T_5_4 = reverse_transformation_matrix(T_4_5)
-    T_0_4 = np.matmul(T_0_5, T_5_4)
-    T_4_0 = reverse_transformation_matrix(T_0_4)
-    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1)
-    T_4_1 = np.matmul(T_4_0, T_0_1)
-    T_1_4 = reverse_transformation_matrix(T_4_1)
-    p14x = T_1_4[0, 3]
-    p14z = T_1_4[2, 3]
-    p14xz = np.sqrt(p14x**2 + p14z**2)
+    T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6)
+    T_4_6 = np.matmul(T_4_5, T_5_6)
+    T_6_4 = reverse_transformation_matrix(T_4_6)
+    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1-np.pi/2)
+    T_1_0 = reverse_transformation_matrix(T_0_1)
+    T_1_4 = np.matmul(T_1_0, np.matmul(T_0_6, T_6_4))
+    p14_mag = np.linalg.norm(T_1_4[0:2, 3])
     a2 = dh[1, 0]
     a3 = dh[2, 0]
-    theta3 = np.acos((p14xz**2 - a2**2 - a3**2)/(2*a2*a3))
+    theta3 = np.acos((p14_mag**2 - a2**2 - a3**2)/(2*a2*a3))
     current_theta3 = dh[2, 3]
-    if(current_theta3 < 0):
+    if(current_theta3 <= 0):
         theta3 *= -1
     theta3 = wrap_angle(theta3)
 
-    # Calculo do Theta 2 (Correcao depende da correcao de Theta 3)
-    theta2 = np.atan2(-p14z, -p14x) - np.asin((-a3*np.sin(theta3))/p14xz)
+    # Calculo do Theta 2
+    p14x = T_1_4[0, 3]
+    p14y = T_1_4[1, 3]
+    theta2 = np.atan2(p14y, -p14x) - np.asin((a3*np.sin(theta3))/p14_mag) + np.pi/2
     theta2 = wrap_angle(theta2)
 
     # Calculo de Theta 4
