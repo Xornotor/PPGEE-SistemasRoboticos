@@ -38,11 +38,24 @@ TESTES_DH = np.array([
 NUM_TESTES_DH = TESTES_DH.shape[0] # Quantidade de casos de teste da C.D.
 
 # Array de casos de teste da C.I (X, Y, Z, Roll, Pitch, Yaw)
+'''
 TESTES_IK = np.array([
-                        [   0.3,      0.4,      0.9,      0,      0,       0    ],
+                        [   0.01,      0.01,      0.01,      0.01,      0.01,       0    ],
                         [   -0.4,      -0.4,      1.26,      0.4,      0.82,       0.9    ],
                         [   -0.4,      0.4,      1.36,      0.4,      0.82,       0.9    ],
                     ])
+'''
+
+TESTES_IK = []
+for i in range(30):
+    TESTES_IK.append(np.array([(i+1)*0.01 + 0.3,
+                               0.3, #(i+1)*0.01 + 0.3,
+                               1.75, #-(i+1)*0.01,
+                               0, #(i+1)*0.01 + 0.1,
+                               0, #(i+1)*0.01 + 0.1,
+                               0 #(i+1)*0.01 + 0.1
+                               ]))
+TESTES_IK = np.array(TESTES_IK)
 
 NUM_TESTES_IK = TESTES_IK.shape[0]
 
@@ -56,6 +69,7 @@ def sysCall_init():
     joints = get_joints()
     for joint in joints:
         sim.setJointMode(joint, sim.jointmode_kinematic, 1)
+    print(TESTES_IK)
 
 # Validacoes implementadas no sensing
 def sysCall_sensing():
