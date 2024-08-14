@@ -58,6 +58,7 @@ def sysCall_sensing():
 
     print(ik_calculate(dk_get_end_effector_matrix()))
     print(read_joints_sensors())
+    #print(ik_calculate(dk_get_end_effector_matrix()) - read_joints_sensors())
     print()
 
 # Atuacao step-by-step
@@ -336,7 +337,11 @@ def ik_calculate(target_matrix):
     theta2 = wrap_angle(theta2)
 
     # Calculo de Theta 4
-    
+    alpha3 = dh[2, 1]
+    T_2_3 = mount_ai_matrix(a3, alpha3, d3, theta3)
+    X23x = T_2_3[0, 0]
+    X23y = T_2_3[1, 0]
+    theta4 = np.atan2(X23y, X23x)
 
     joint_values = np.array([theta1, theta2, theta3, theta4, theta5, theta6])
 
