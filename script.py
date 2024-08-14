@@ -50,10 +50,10 @@ TESTES_IK = []
 for i in range(30):
     TESTES_IK.append(np.array([(i+1)*0.01 + 0.3,
                                0.3, #(i+1)*0.01 + 0.3,
-                               1.75, #-(i+1)*0.01,
-                               0, #(i+1)*0.01 + 0.1,
-                               0, #(i+1)*0.01 + 0.1,
-                               0 #(i+1)*0.01 + 0.1
+                               1.45, #-(i+1)*0.01,
+                               1.57, #(i+1)*0.01 + 0.1,
+                               3.14, #(i+1)*0.01 + 0.1,
+                               1.57 #(i+1)*0.01 + 0.1
                                ]))
 TESTES_IK = np.array(TESTES_IK)
 
@@ -302,19 +302,27 @@ def ik_calculate(target_matrix):
     p05y = P_0_5[1]
     theta1_sh_left = np.atan2(p05y, p05x) + np.acos(d3/np.sqrt(p05x**2 + p05y**2)) + np.pi
     theta1_sh_right = np.atan2(p05y, p05x) - np.acos(d3/np.sqrt(p05x**2 + p05y**2)) + np.pi
-    current_theta2 = dh[1, 3] + np.pi/2
-    if (current_theta2) >= 0: # Se o ombro estiver pra a esquerda:
-        theta1 = wrap_angle(theta1_sh_left)
-    else:
-        theta1 = wrap_angle(theta1_sh_right)
+    
+    # Se o ombro estiver pra a esquerda:
+    #current_theta2 = dh[1, 3] + np.pi/2
+    #if (current_theta2) >= 0:
+        #theta1 = wrap_angle(theta1_sh_left)
+    #else:
+        #theta1 = wrap_angle(theta1_sh_right)
+    theta1 = wrap_angle(theta1_sh_left)
 
     # Calculo do Theta 5
     p06x = T_0_6[0, 3]
     p06y = T_0_6[1, 3]
-    theta5 = np.acos(((p06x*np.sin(theta1-np.pi/2))-(p06y*np.cos(theta1-np.pi/2))-d3)/d6)
-    current_theta5 = dh[4, 3]
-    if(current_theta5 < 0):
-        theta5 *= -1
+
+    acos_th5_param = ((p06x*np.sin(theta1-np.pi/2))-(p06y*np.cos(theta1-np.pi/2))-d3)/d6
+    assert abs(acos_th5_param) <= 1, "ERRO: Argumento do acos do Theta 5 e maior que 1, solucao invalida"
+    theta5 = np.acos(acos_th5_param)
+
+    # Se o pulso estiver pra cima:
+    #current_theta5 = dh[4, 3]
+    #if(current_theta5 < 0):
+        #theta5 *= -1
     theta5 = wrap_angle(theta5)
 
     # Calculo do Theta 6
@@ -323,13 +331,15 @@ def ik_calculate(target_matrix):
     X60y = T_6_0[1, 0]
     Y60x = T_6_0[0, 1]
     Y60y = T_6_0[1, 1]
+    atan2_first = (-X60y*np.sin(theta1+np.pi/2))+(Y60y*np.cos(theta1+np.pi/2))
+    atan2_second = ((X60x*np.sin(theta1+np.pi/2))-(Y60x*np.cos(theta1+np.pi/2)))
     current_theta6 = dh[5, 3]
-    if(np.sin(theta5) != 0):
-        atan2_first = ((-X60y*np.sin(theta1+np.pi/2))+(Y60y*np.cos(theta1+np.pi/2)))/np.sin(theta5)
-        atan2_second = ((X60x*np.sin(theta1+np.pi/2))-(Y60x*np.cos(theta1+np.pi/2)))/np.sin(theta5)
-        theta6 = np.atan2(atan2_first, atan2_second)
-    else:
+    if np.sin(theta5) == 0 or (atan2_first == 0 and atan2_second == 0):
         theta6 = current_theta6
+    else:
+        atan2_first /= np.sin(theta5)
+        atan2_second /= np.sin(theta5)
+        theta6 = np.atan2(atan2_first, atan2_second)        
     theta6 = wrap_angle(theta6)
 
     # Calculo do Theta 3
@@ -359,9 +369,11 @@ def ik_calculate(target_matrix):
         theta3 = 0
     else:
         theta3 = np.acos(acos_arg)
-        current_theta3 = dh[2, 3]
-        if(current_theta3 <= 0):
-            theta3 *= -1
+
+        # Se cotovelo estiver para baixo:
+        #current_theta3 = dh[2, 3]
+        #if(current_theta3 <= 0):
+            #theta3 *= -1
         theta3 = wrap_angle(theta3)
 
     # Calculo do Theta 2
@@ -398,6 +410,10 @@ def ik_validate(test_cases, num_teste):
     print(f"Validacao Cinematica Inversa - Caso teste {num_teste+1}")
     print(f"========================================================")
 
+    print("THETA VAL:")
+    print(theta_values)
+    print()
+
     for joint, value in zip(joints, theta_values):
         sim.setJointPosition(joint, value)
     end_orient = sim.getObjectOrientation(end_effector)
@@ -406,6 +422,13 @@ def ik_validate(test_cases, num_teste):
                                                            end_orient[2]))
     end_ground = np.array([sim.getObjectPosition(end_effector),
                           end_orient[::-1]]).reshape((-1))
+    
+    print("TARGET_MATRIX:")
+    print(target_matrix)
+    print()
+    print("TRUTH:")
+    print(np.array(sim.getObjectMatrix(end_effector)).reshape((3, 4)))
+    print()
 
     end_diff = np.array([
                          target_pose[0] - end_ground[0],
