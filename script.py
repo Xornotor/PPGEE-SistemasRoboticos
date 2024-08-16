@@ -396,12 +396,11 @@ def ik_calculate(target_matrix):
     T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1-np.pi/2)
     T_1_0 = reverse_transformation_matrix(T_0_1)
     T_1_4 = np.matmul(T_1_0, np.matmul(T_0_6, T_6_4))
-    p14x = T_1_4[0, 3]
-    p14y = T_1_4[1, 3]
-    p14xy = np.sqrt(p14x**2 + p14y**2)
+    P_1_3 = np.matmul(T_1_4, np.array([0, -d4, 0, 1])) - np.array([0, 0, 0, 1])
+    p13_mod = np.linalg.norm(P_1_3)
     a2 = dh[1, 0]
     a3 = dh[2, 0]
-    acos_arg = (p14xy**2 - a2**2 - a3**2)/(2*a2*a3)
+    acos_arg = (p13_mod**2 - a2**2 - a3**2)/(2*a2*a3)
     if(acos_arg > 1):
         theta3 = 0
     else:
@@ -414,16 +413,24 @@ def ik_calculate(target_matrix):
         theta3 = wrap_angle(theta3)
 
     # Calculo do Theta 2
-    theta2 = np.atan2(p14y, -p14x) - np.asin((a3*np.sin(theta3))/p14xy) + np.pi/2
+    p13x = P_1_3[0]
+    p13y = P_1_3[1]
+    theta2 = np.atan2(p13y, -p13x) - np.asin((a3*np.sin(theta3))/p13_mod) + np.pi/2
     theta2 = wrap_angle(theta2)
 
     # Calculo de Theta 4
+    alpha2 = dh[1, 1]
+    d2 = dh[1, 2]
     alpha3 = dh[2, 1]
     d3 = dh[2, 2]
+    T_1_2 = mount_ai_matrix(a2, alpha2, d2, theta2)
     T_2_3 = mount_ai_matrix(a3, alpha3, d3, theta3)
-    X23x = T_2_3[0, 0]
-    X23y = T_2_3[1, 0]
-    theta4 = np.atan2(X23y, X23x)
+    T_1_3 = np.matmul(T_1_2, T_2_3)
+    T_3_1 = reverse_transformation_matrix(T_1_3)
+    T_3_4 = np.matmul(T_3_1, T_1_4)
+    X34x = T_3_4[0, 0]
+    X34y = T_3_4[1, 0]
+    theta4 = np.atan2(X34y, X34x)
 
     joint_values = np.array([theta1, theta2, theta3, theta4, theta5, theta6])
 
