@@ -19,7 +19,7 @@ from time import sleep
 SIGNAL = True
 
 FLAG_DK = True # Flag que indica se a validacao da C.D. foi concluida
-FLAG_IK = False #Flag que indica se a validacao da C.D. foi concluida
+FLAG_IK = False # Flag que indica se a validacao da C.D. foi concluida
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 COUNTER_IK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 
@@ -40,9 +40,9 @@ NUM_TESTES_DH = TESTES_DH.shape[0] # Quantidade de casos de teste da C.D.
 # Array de casos de teste da C.I (X, Y, Z, Roll, Pitch, Yaw)
 '''
 TESTES_IK = np.array([
-                        [   0.01,      0.01,      0.01,      0.01,      0.01,       0    ],
+                        [   0.01,      0.01,      0.01,      0.01,     0.01,       0      ],
                         [   -0.4,      -0.4,      1.26,      0.4,      0.82,       0.9    ],
-                        [   -0.4,      0.4,      1.36,      0.4,      0.82,       0.9    ],
+                        [   -0.4,      0.4,       1.36,      0.4,      0.82,       0.9    ],
                     ])
 '''
 
@@ -51,9 +51,9 @@ for i in range(30):
     TESTES_IK.append(np.array([(i+1)*0.01 + 0.3,
                                0.3, #(i+1)*0.01 + 0.3,
                                1.45, #-(i+1)*0.01,
+                               -3.14, #(i+1)*0.01 + 0.1,
                                1.57, #(i+1)*0.01 + 0.1,
-                               3.14, #(i+1)*0.01 + 0.1,
-                               1.57 #(i+1)*0.01 + 0.1
+                               -3.14 #(i+1)*0.01 + 0.1
                                ]))
 TESTES_IK = np.array(TESTES_IK)
 
@@ -69,7 +69,7 @@ def sysCall_init():
     joints = get_joints()
     for joint in joints:
         sim.setJointMode(joint, sim.jointmode_kinematic, 1)
-    print(TESTES_IK)
+    #print(TESTES_IK)
 
 # Validacoes implementadas no sensing
 def sysCall_sensing():
@@ -90,10 +90,12 @@ def sysCall_sensing():
             ik_validate(TESTES_IK, COUNTER_IK)
             COUNTER_IK += 1
 
+    '''
     print(ik_calculate(dk_get_end_effector_matrix()))
     print(read_joints_sensors())
     #print(ik_calculate(dk_get_end_effector_matrix()) - read_joints_sensors())
     print()
+    '''
 
 # Atuacao step-by-step
 def sysCall_actuation():
@@ -139,9 +141,17 @@ def read_joints_sensors():
 def wrap_angle(angle):
     return np.atan2(np.sin(angle),np.cos(angle))
 
-# Limita angulo entre 0 e 2pi
-def wrap_2pi(angle):
-    return (angle + (2*np.pi)) % (2*np.pi)
+# Montagem da matriz Ai
+def mount_ai_matrix(a, alpha, d, theta):
+    s_alp = np.sin(alpha)
+    c_alp = np.cos(alpha)
+    s_the = np.sin(theta)
+    c_the = np.cos(theta)
+    matrix = np.array([ [ c_the,    -s_the*c_alp,   s_the*s_alp,    a*c_the ],
+                        [ s_the,    c_the*c_alp,    -c_the*s_alp,   a*s_the ],
+                        [ 0,        s_alp,          c_alp,          d       ],
+                        [ 0,        0,              0,              1       ]])
+    return matrix
 
 # Gera matriz de transformacao reversa
 def reverse_transformation_matrix(matrix):
@@ -160,6 +170,16 @@ def pose2matrix(target_pose):
     pitch_matrix = np.array([[np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-np.sin(pitch), 0, np.cos(pitch)]]) 
     yaw_matrix = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
 
+    print("ROLL:")
+    print(roll_matrix)
+    print()
+    print("PITCH:")
+    print(pitch_matrix)
+    print()
+    print("YAW:")
+    print(yaw_matrix)
+    print()
+
     r_matrix = np.matmul(np.matmul(yaw_matrix, pitch_matrix), roll_matrix)
 
     t_matrix = np.identity(4)
@@ -167,6 +187,15 @@ def pose2matrix(target_pose):
     for i in range(3):
         t_matrix[i, 3] = target_pose[i]
     return t_matrix
+
+def matrix2pose(target_matrix):
+    x = target_matrix[0, 3]
+    y = target_matrix[1, 3]
+    z = target_matrix[2, 3]
+    roll = np.atan2(target_matrix[2, 1], target_matrix[2, 2])
+    pitch = np.atan2(-target_matrix[2, 0],  np.sqrt(target_matrix[2, 1]**2 + target_matrix[2, 2]**2))
+    yaw = np.atan2(target_matrix[1, 0], target_matrix[0, 0])
+    return np.array([x, y, z, roll, pitch, yaw])
 
 #-----------------------------------------------#
 #---------Funcoes de Cinematica Direta----------#
@@ -177,24 +206,12 @@ def dk_get_dh():
     theta = read_joints_sensors()
     dh = np.array([ [    0,             -np.pi/2,   89.159e-3, theta[0] + np.pi/2  ], # A1
                     [    425e-3,        0,          0,         theta[1] - np.pi/2  ], # A2
-                    [    392.25e-3,     0,          109.15e-3, theta[2]            ], # A3
-                    [    0,             -np.pi/2,   0,         theta[3] - np.pi/2  ], # A4
+                    [    392.25e-3,     0,          0,         theta[2]            ], # A3
+                    [    0,             -np.pi/2,   109.15e-3, theta[3] - np.pi/2  ], # A4
                     [    0,             np.pi/2,    94.65e-3,  theta[4]            ], # A5
                     [    0,             0,          82.3e-3,   theta[5]            ], # A6
                  ])
     return dh
-
-# Montagem da matriz Ai
-def mount_ai_matrix(a, alpha, d, theta):
-    s_alp = np.sin(alpha)
-    c_alp = np.cos(alpha)
-    s_the = np.sin(theta)
-    c_the = np.cos(theta)
-    matrix = np.array([ [ c_the,    -s_the*c_alp,   s_the*s_alp,    a*c_the ],
-                        [ s_the,    c_the*c_alp,    -c_the*s_alp,   a*s_the ],
-                        [ 0,        s_alp,          c_alp,          d       ],
-                        [ 0,        0,              0,              1       ]])
-    return matrix
 
 # Matriz Ai
 def dk_get_ai(i):
@@ -214,6 +231,24 @@ def dk_get_transformation_matrix():
     t_matrix = np.identity(4)
     for i in range(1, 7):
         t_matrix = np.matmul(t_matrix, dk_get_ai(i))
+    return t_matrix
+
+# Matriz de transformacao completa a partir de lista de ângulos
+def dk_get_transformation_matrix_from_angles(joint_values):
+    t_matrix = np.identity(4)
+    dh = dk_get_dh()
+    for i in range(0, 6):
+        dh_line = dh[i]
+        a = dh_line[0]
+        alpha = dh_line[1]
+        d = dh_line[2]
+        theta = joint_values[i]
+        if(i == 0):
+            theta += np.pi/2
+        elif(i == 1 or i == 3):
+            theta -= np.pi/2
+        ai_matrix = mount_ai_matrix(a, alpha, d, theta)
+        t_matrix = np.matmul(t_matrix, ai_matrix)
     return t_matrix
 
 # Posicao da garra
@@ -280,6 +315,8 @@ def dk_validate(test_cases, num_teste):
 
 
 # Calcular Cinematica Inversa com base em target matrix
+import numpy as np
+
 def ik_calculate(target_matrix):
     # Inicializacao das variaveis
     theta1 = theta2 = theta3 = theta4 = theta5 = theta6 = 0
@@ -297,11 +334,11 @@ def ik_calculate(target_matrix):
     d6 = dh[5, 2]
     T_0_6 = np.matmul(rev_base, target_matrix)
     P_0_5 = np.matmul(T_0_6, np.array([0, 0, -d6, 1]))
-    d3 = dh[2, 2]
+    d4 = dh[3, 2]
     p05x = P_0_5[0]
     p05y = P_0_5[1]
-    theta1_sh_left = np.atan2(p05y, p05x) + np.acos(d3/np.sqrt(p05x**2 + p05y**2)) + np.pi
-    theta1_sh_right = np.atan2(p05y, p05x) - np.acos(d3/np.sqrt(p05x**2 + p05y**2)) + np.pi
+    theta1_sh_left = np.atan2(p05y, p05x) + np.acos(d4/np.sqrt(p05x**2 + p05y**2)) + np.pi
+    theta1_sh_right = np.atan2(p05y, p05x) - np.acos(d4/np.sqrt(p05x**2 + p05y**2)) + np.pi
     
     # Se o ombro estiver pra a esquerda:
     #current_theta2 = dh[1, 3] + np.pi/2
@@ -315,7 +352,7 @@ def ik_calculate(target_matrix):
     p06x = T_0_6[0, 3]
     p06y = T_0_6[1, 3]
 
-    acos_th5_param = ((p06x*np.sin(theta1-np.pi/2))-(p06y*np.cos(theta1-np.pi/2))-d3)/d6
+    acos_th5_param = ((p06x*np.sin(theta1-np.pi/2))-(p06y*np.cos(theta1-np.pi/2))-d4)/d6
     assert abs(acos_th5_param) <= 1, "ERRO: Argumento do acos do Theta 5 e maior que 1, solucao invalida"
     theta5 = np.acos(acos_th5_param)
 
@@ -382,6 +419,7 @@ def ik_calculate(target_matrix):
 
     # Calculo de Theta 4
     alpha3 = dh[2, 1]
+    d3 = dh[2, 2]
     T_2_3 = mount_ai_matrix(a3, alpha3, d3, theta3)
     X23x = T_2_3[0, 0]
     X23y = T_2_3[1, 0]
@@ -400,19 +438,26 @@ def ik_validate(test_cases, num_teste):
 
     target_pose = test_cases[num_teste]
     target_matrix = pose2matrix(target_pose)
+    target_pose_reverted = matrix2pose(target_matrix)
+    print("TESTE TARGET POSE")
+    print(target_pose)
+    print(target_matrix)
+    print(target_pose_reverted)
     theta_values = ik_calculate(target_matrix)
     joints = get_joints()
     end_effector = sim.getObject("/UR5/connection")
+
+    base_matrix = sim.getObjectMatrix(sim.getObject("/UR5"))
+    base_matrix = np.array([base_matrix[0:4],
+                            base_matrix[4:8],
+                            base_matrix[8:12],
+                            [0, 0, 0, 1]])
 
     fail_count = 0
 
     print(f"========================================================")
     print(f"Validacao Cinematica Inversa - Caso teste {num_teste+1}")
     print(f"========================================================")
-
-    print("THETA VAL:")
-    print(theta_values)
-    print()
 
     for joint, value in zip(joints, theta_values):
         sim.setJointPosition(joint, value)
@@ -423,12 +468,8 @@ def ik_validate(test_cases, num_teste):
     end_ground = np.array([sim.getObjectPosition(end_effector),
                           end_orient[::-1]]).reshape((-1))
     
-    print("TARGET_MATRIX:")
-    print(target_matrix)
-    print()
-    print("TRUTH:")
-    print(np.array(sim.getObjectMatrix(end_effector)).reshape((3, 4)))
-    print()
+    end_dk = dk_get_transformation_matrix_from_angles(theta_values)
+    end_dk = matrix2pose(np.matmul(base_matrix, end_dk)) 
 
     end_diff = np.array([
                          target_pose[0] - end_ground[0],
@@ -440,6 +481,7 @@ def ik_validate(test_cases, num_teste):
                          ])
     print(f"Angulos das Juntas: {theta_values}")
     print(f"Pose Desejada (X, Y, Z, R, P, Y): {target_pose}")
+    print(f"Calculo DK (X, Y, Z, R, P, Y):    {end_dk}")
     print(f"Truth (X, Y, Z, R, P, Y):         {end_ground}")
     print(f"Diff (X, Y, Z, R, P, Y):          {end_diff}")
     for i in range(len(end_diff)):
