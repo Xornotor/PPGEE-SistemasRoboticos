@@ -48,12 +48,12 @@ TESTES_IK = np.array([
 
 TESTES_IK = []
 for i in range(30):
-    TESTES_IK.append(np.array([(i+1)*0.01 + 0.3,
+    TESTES_IK.append(np.array([(i+1)*(-0.01) + 0.5,
                                0.3, #(i+1)*0.01 + 0.3,
                                1.45, #-(i+1)*0.01,
-                               -3.14, #(i+1)*0.01 + 0.1,
-                               1.57, #(i+1)*0.01 + 0.1,
-                               -3.14 #(i+1)*0.01 + 0.1
+                               (i+1)*0.02, #(i+1)*0.01 + 0.1,
+                               1.57 - (i+1)*0.02, #(i+1)*0.01 + 0.1,
+                               (i+1)*0.03 #(i+1)*0.01 + 0.1
                                ]))
 TESTES_IK = np.array(TESTES_IK)
 
@@ -105,9 +105,9 @@ def sysCall_actuation():
         joints = get_joints()
         for joint in joints:
             orient = sim.getJointPosition(joint)
-            if(orient > np.pi/4):
+            if(orient > np.pi/2):
                 SIGNAL = False
-            elif(orient < -np.pi/4):
+            elif(orient < -np.pi/2):
                 SIGNAL = True
             if(SIGNAL):
                 orient += 0.01
@@ -169,16 +169,6 @@ def pose2matrix(target_pose):
     roll_matrix = np.array([[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]]) 
     pitch_matrix = np.array([[np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-np.sin(pitch), 0, np.cos(pitch)]]) 
     yaw_matrix = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
-
-    print("ROLL:")
-    print(roll_matrix)
-    print()
-    print("PITCH:")
-    print(pitch_matrix)
-    print()
-    print("YAW:")
-    print(yaw_matrix)
-    print()
 
     r_matrix = np.matmul(np.matmul(yaw_matrix, pitch_matrix), roll_matrix)
 
@@ -445,11 +435,6 @@ def ik_validate(test_cases, num_teste):
 
     target_pose = test_cases[num_teste]
     target_matrix = pose2matrix(target_pose)
-    target_pose_reverted = matrix2pose(target_matrix)
-    print("TESTE TARGET POSE")
-    print(target_pose)
-    print(target_matrix)
-    print(target_pose_reverted)
     theta_values = ik_calculate(target_matrix)
     joints = get_joints()
     end_effector = sim.getObject("/UR5/connection")
@@ -474,9 +459,6 @@ def ik_validate(test_cases, num_teste):
                                                            end_orient[2]))
     end_ground = np.array([sim.getObjectPosition(end_effector),
                           end_orient[::-1]]).reshape((-1))
-    
-    end_dk = dk_get_transformation_matrix_from_angles(theta_values)
-    end_dk = matrix2pose(np.matmul(base_matrix, end_dk)) 
 
     end_diff = np.array([
                          target_pose[0] - end_ground[0],
@@ -488,7 +470,6 @@ def ik_validate(test_cases, num_teste):
                          ])
     print(f"Angulos das Juntas: {theta_values}")
     print(f"Pose Desejada (X, Y, Z, R, P, Y): {target_pose}")
-    print(f"Calculo DK (X, Y, Z, R, P, Y):    {end_dk}")
     print(f"Truth (X, Y, Z, R, P, Y):         {end_ground}")
     print(f"Diff (X, Y, Z, R, P, Y):          {end_diff}")
     for i in range(len(end_diff)):
