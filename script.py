@@ -18,10 +18,10 @@ from time import sleep
 #-----------------------------------------------#
 SIGNAL = True
 
-FLAG_DK = True # Flag que indica se a validacao da C.D. foi concluida
-FLAG_IK = False # Flag que indica se a validacao da C.D. foi concluida
+FLAG_DK = False # Flag que indica se a validacao da C.D. foi concluida
+FLAG_IK = False # Flag que indica se a validacao da C.I. foi concluida
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
-COUNTER_IK = 0 # Contador de casos de teste da C.D. que passaram por validacao
+COUNTER_IK = 0 # Contador de casos de teste da C.I. que passaram por validacao
 
 # Array de casos de teste da C.D (J1, J2, J3, J4, J5, J6)
 TESTES_DH = np.array([  
@@ -40,21 +40,21 @@ NUM_TESTES_DH = TESTES_DH.shape[0] # Quantidade de casos de teste da C.D.
 # Array de casos de teste da C.I (X, Y, Z, Roll, Pitch, Yaw)
 '''
 TESTES_IK = np.array([
-                        [   0.01,      0.01,      0.01,      0.01,     0.01,       0      ],
-                        [   -0.4,      -0.4,      1.26,      0.4,      0.82,       0.9    ],
-                        [   -0.4,      0.4,       1.36,      0.4,      0.82,       0.9    ],
+                        [   -0.4,      -0.4,      1.46,      0.4,      0.82,       0.9    ],
+                        [   -0.4,      0.4,       1.37,      0.4,      0.82,       0.9    ],
                     ])
 '''
 
 TESTES_IK = []
-for i in range(30):
-    TESTES_IK.append(np.array([(i+1)*(-0.01) + 0.5,
-                               0.3, #(i+1)*0.01 + 0.3,
-                               1.45, #-(i+1)*0.01,
-                               (i+1)*0.02, #(i+1)*0.01 + 0.1,
-                               1.57 - (i+1)*0.02, #(i+1)*0.01 + 0.1,
-                               (i+1)*0.03 #(i+1)*0.01 + 0.1
+for i in range(50):
+    TESTES_IK.append(np.array([(i+1)*(-0.02) + 0.4,
+                               (i+1)*(0.01) + 0.3,
+                               1.45,
+                               (i+1)*(-0.01),
+                               1.57+(i+1)*0.01,
+                               (i+1)*(-0.01)
                                ]))
+    
 TESTES_IK = np.array(TESTES_IK)
 
 NUM_TESTES_IK = TESTES_IK.shape[0]
@@ -194,6 +194,18 @@ def matrix2pose(target_matrix):
 # Tabela DH (a, alpha, d, theta)
 def dk_get_dh():
     theta = read_joints_sensors()
+
+    # Matriz adaptada para modelo do CoppeliaSim (com JacoHand)
+    dh = np.array([ [    0,             -np.pi/2,   74.55e-3,            theta[0] + np.pi/2  ], # A1
+                    [    425.1e-3,      0,          0,                   theta[1] - np.pi/2  ], # A2
+                    [    392.15e-3,     0,          0,                   theta[2]            ], # A3
+                    [    0,             -np.pi/2,   103.13e-3,           theta[3] - np.pi/2  ], # A4
+                    [    0,             np.pi/2,    87.88e-3,            theta[4]            ], # A5
+                    [    0,             0,          81.82e-3 + 56.2e-3,  theta[5]            ], # A6
+                 ])
+    
+    '''
+    # Matriz com valores encontrados em artigos
     dh = np.array([ [    0,             -np.pi/2,   89.159e-3, theta[0] + np.pi/2  ], # A1
                     [    425e-3,        0,          0,         theta[1] - np.pi/2  ], # A2
                     [    392.25e-3,     0,          0,         theta[2]            ], # A3
@@ -201,6 +213,7 @@ def dk_get_dh():
                     [    0,             np.pi/2,    94.65e-3,  theta[4]            ], # A5
                     [    0,             0,          82.3e-3,   theta[5]            ], # A6
                  ])
+    '''
     return dh
 
 # Matriz Ai
@@ -254,11 +267,11 @@ def dk_get_end_effector_matrix():
 
 # Validacao Cinematica Direta
 def dk_validate(test_cases, num_teste):
-    TOLERANCE = 0.03    # Error tolerance in meters
+    TOLERANCE = 0.02    # Error tolerance in meters
 
     sleep(1)
 
-    end_effector = sim.getObject("/UR5/connection")
+    end_effector = sim.getObject("/UR5/JacoHand")
     joints = get_joints()
     fail_count = 0
 
@@ -303,10 +316,7 @@ def dk_validate(test_cases, num_teste):
 #--------Funcoes de Cinematica Inversa----------#
 #-----------------------------------------------#
 
-
 # Calcular Cinematica Inversa com base em target matrix
-import numpy as np
-
 def ik_calculate(target_matrix):
     # Inicializacao das variaveis
     theta1 = theta2 = theta3 = theta4 = theta5 = theta6 = 0
@@ -330,12 +340,14 @@ def ik_calculate(target_matrix):
     theta1_sh_left = np.atan2(p05y, p05x) + np.acos(d4/np.sqrt(p05x**2 + p05y**2)) + np.pi
     theta1_sh_right = np.atan2(p05y, p05x) - np.acos(d4/np.sqrt(p05x**2 + p05y**2)) + np.pi
     
-    # Se o ombro estiver pra a esquerda:
-    #current_theta2 = dh[1, 3] + np.pi/2
-    #if (current_theta2) >= 0:
-        #theta1 = wrap_angle(theta1_sh_left)
-    #else:
-        #theta1 = wrap_angle(theta1_sh_right)
+    '''
+    #Se o ombro estiver pra a esquerda:
+    current_theta2 = dh[1, 3] + np.pi/2
+    if (current_theta2) >= 0:
+        theta1 = wrap_angle(theta1_sh_left)
+    else:
+        theta1 = wrap_angle(theta1_sh_right)
+    '''
     theta1 = wrap_angle(theta1_sh_left)
 
     # Calculo do Theta 5
@@ -347,32 +359,28 @@ def ik_calculate(target_matrix):
     theta5 = np.acos(acos_th5_param)
 
     # Se o pulso estiver pra cima:
-    #current_theta5 = dh[4, 3]
-    #if(current_theta5 < 0):
+    # current_theta5 = dh[4, 3]
+    # if(current_theta5 < 0):
         #theta5 *= -1
     theta5 = wrap_angle(theta5)
 
     # Calculo do Theta 6
-    T_6_0 = reverse_transformation_matrix(T_0_6)
-    X60x = T_6_0[0, 0]
-    X60y = T_6_0[1, 0]
-    Y60x = T_6_0[0, 1]
-    Y60y = T_6_0[1, 1]
-    atan2_first = (-X60y*np.sin(theta1+np.pi/2))+(Y60y*np.cos(theta1+np.pi/2))
-    atan2_second = ((X60x*np.sin(theta1+np.pi/2))-(Y60x*np.cos(theta1+np.pi/2)))
-    current_theta6 = dh[5, 3]
-    if np.sin(theta5) == 0 or (atan2_first == 0 and atan2_second == 0):
-        theta6 = current_theta6
-    else:
-        atan2_first /= np.sin(theta5)
-        atan2_second /= np.sin(theta5)
-        theta6 = np.atan2(atan2_first, atan2_second)        
-    theta6 = wrap_angle(theta6)
-
-    # Calculo do Theta 3
     a1 = dh[0, 0]
     alpha1 = dh[0, 1]
     d1 = dh[0, 2]
+    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1-np.pi/2)
+    T_6_0 = reverse_transformation_matrix(T_0_6)
+    T_6_1 = np.matmul(T_6_0, T_0_1)
+    Z61x = T_6_1[0, 2]
+    Z61y = T_6_1[1, 2]
+    current_theta6 = dh[5, 3]
+    if np.sin(theta5) == 0 or (Z61x == 0 and Z61y == 0):
+        theta6 = current_theta6
+    else:
+        theta6 = np.atan2(-Z61y/np.sin(theta5), Z61x/np.sin(theta5))        
+    theta6 = wrap_angle(theta6)
+
+    # Calculo do Theta 3
     a5 = dh[4, 0]
     alpha5 = dh[4, 1]
     d5 = dh[4, 2]
@@ -383,14 +391,14 @@ def ik_calculate(target_matrix):
     T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6)
     T_4_6 = np.matmul(T_4_5, T_5_6)
     T_6_4 = reverse_transformation_matrix(T_4_6)
-    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1-np.pi/2)
-    T_1_0 = reverse_transformation_matrix(T_0_1)
-    T_1_4 = np.matmul(T_1_0, np.matmul(T_0_6, T_6_4))
-    P_1_3 = np.matmul(T_1_4, np.array([0, -d4, 0, 1])) - np.array([0, 0, 0, 1])
-    p13_mod = np.linalg.norm(P_1_3)
+    T_1_6 = reverse_transformation_matrix(T_6_1)
+    T_1_4 = np.matmul(T_1_6, T_6_4)
+    p14x = T_1_4[0, 3]
+    p14y = T_1_4[1, 3]
+    p14xy = np.sqrt(p14x**2 + p14y**2)
     a2 = dh[1, 0]
     a3 = dh[2, 0]
-    acos_arg = (p13_mod**2 - a2**2 - a3**2)/(2*a2*a3)
+    acos_arg = (p14xy**2 - a2**2 - a3**2)/(2*a2*a3)
     if(acos_arg > 1):
         theta3 = 0
     else:
@@ -403,9 +411,7 @@ def ik_calculate(target_matrix):
         theta3 = wrap_angle(theta3)
 
     # Calculo do Theta 2
-    p13x = P_1_3[0]
-    p13y = P_1_3[1]
-    theta2 = np.atan2(p13y, -p13x) - np.asin((a3*np.sin(theta3))/p13_mod) + np.pi/2
+    theta2 = np.atan2(p14y, -p14x) - np.asin((a3*np.sin(theta3))/p14xy) + np.pi/2
     theta2 = wrap_angle(theta2)
 
     # Calculo de Theta 4
@@ -437,7 +443,7 @@ def ik_validate(test_cases, num_teste):
     target_matrix = pose2matrix(target_pose)
     theta_values = ik_calculate(target_matrix)
     joints = get_joints()
-    end_effector = sim.getObject("/UR5/connection")
+    end_effector = sim.getObject("/UR5/JacoHand")
 
     base_matrix = sim.getObjectMatrix(sim.getObject("/UR5"))
     base_matrix = np.array([base_matrix[0:4],
