@@ -199,6 +199,7 @@ def print_matrix(m):
     print(m)
     print(np.linalg.norm(m[:, 3] - np.array([0,0,0,1])))
     pose = matrix2pose(m)
+    print(pose[3:])
     for i in range(3, 6):
         pose[i] *= 180/np.pi
     print(pose)
@@ -457,23 +458,8 @@ def ik_calculate(target_matrix):
     theta4 = np.atan2(X34y, X34x)
     theta4 = wrap_angle(theta4 + offset[3])
 
-    T_0_1_check = mount_ai_matrix(dh[0, 0], dh[0, 1], dh[0, 2], theta1)
-    T_1_2_check = mount_ai_matrix(dh[1, 0], dh[1, 1], dh[1, 2], theta2)
-    T_2_3_check = mount_ai_matrix(dh[2, 0], dh[2, 1], dh[2, 2], theta3)
-    T_3_4_check = mount_ai_matrix(dh[3, 0], dh[3, 1], dh[3, 2], theta4)
-    T_4_5_check = mount_ai_matrix(dh[4, 0], dh[4, 1], dh[4, 2], theta5)
-    T_5_6_check = mount_ai_matrix(dh[5, 0], dh[5, 1], dh[5, 2], theta6)
-
-    T_0_3_check = np.matmul(T_0_1_check, np.matmul(T_1_2_check, T_2_3_check))
-    T_3_6_check = np.matmul(T_3_4_check, np.matmul(T_4_5_check, T_5_6_check))
-    T_0_6_check = np.matmul(T_0_3_check, T_3_6_check)
-
-    #print(T_0_6_check)
-    #print()
-    #print(T_0_6)
-    #print()
-
-    #print_matrix(T_3_4)
+    #print_matrix(np.matmul(np.matmul(T_0_1, T_1_2), T_2_3))
+    #print_matrix(np.matmul(T_0_1, T_1_2))
 
     joint_values = np.array([wrap_angle(theta1),
                              wrap_angle(theta2),
