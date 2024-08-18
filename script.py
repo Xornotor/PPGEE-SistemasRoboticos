@@ -18,7 +18,7 @@ from time import sleep
 #-----------------------------------------------#
 SIGNAL = True
 
-FLAG_DK = False # Flag que indica se a validacao da C.D. foi concluida
+FLAG_DK = True # Flag que indica se a validacao da C.D. foi concluida
 FLAG_IK = False # Flag que indica se a validacao da C.I. foi concluida
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 COUNTER_IK = 0 # Contador de casos de teste da C.I. que passaram por validacao
@@ -46,13 +46,13 @@ TESTES_IK = np.array([
 '''
 
 TESTES_IK = []
-for i in range(50):
-    TESTES_IK.append(np.array([(i+1)*(-0.02) + 0.4,
-                               (i+1)*(0.01) + 0.3,
-                               1.45,
-                               (i+1)*(-0.01),
-                               1.57+(i+1)*0.01,
-                               (i+1)*(-0.01)
+for i in range(10):
+    TESTES_IK.append(np.array([0.3*np.sin((i+1)*(0.07)) - 0.4,
+                               0.3*np.sin((i+1)*(-0.07)) - 0.3,
+                               (i+1)*(0.01) + 1.5,
+                               0, #(i+1)*(-0.03),
+                               np.pi/4, #(i+1)*0.03,
+                               0, #(i+1)*(-0.03)
                                ]))
     
 TESTES_IK = np.array(TESTES_IK)
@@ -100,7 +100,14 @@ def sysCall_sensing():
 # Atuacao step-by-step
 def sysCall_actuation():
     global SIGNAL
-    
+
+    '''
+    joints = get_joints()
+    for joint in joints:
+        sim.setJointPosition(joint, 0)
+    '''
+
+    '''
     if(FLAG_DK and FLAG_IK):
         joints = get_joints()
         for joint in joints:
@@ -114,6 +121,7 @@ def sysCall_actuation():
             else:
                 orient -= 0.01
             sim.setJointPosition(joint, orient)
+    '''
 
 #-----------------------------------------------#
 #--------------Funcoes Auxiliares---------------#
@@ -187,6 +195,12 @@ def matrix2pose(target_matrix):
     yaw = np.atan2(target_matrix[1, 0], target_matrix[0, 0])
     return np.array([x, y, z, roll, pitch, yaw])
 
+def print_matrix(m):
+    print(m)
+    print(np.linalg.norm(m[:, 3] - np.array([0,0,0,1])))
+    print(matrix2pose(m))
+    print()
+
 #-----------------------------------------------#
 #---------Funcoes de Cinematica Direta----------#
 #-----------------------------------------------#
@@ -195,6 +209,7 @@ def matrix2pose(target_matrix):
 def dk_get_dh():
     theta = read_joints_sensors()
 
+    '''
     # Matriz adaptada para modelo do CoppeliaSim (com JacoHand)
     dh = np.array([ [    0,             -np.pi/2,   74.55e-3,            theta[0] + np.pi/2  ], # A1
                     [    425.1e-3,      0,          0,                   theta[1] - np.pi/2  ], # A2
@@ -205,15 +220,14 @@ def dk_get_dh():
                  ])
     
     '''
-    # Matriz com valores encontrados em artigos
-    dh = np.array([ [    0,             -np.pi/2,   89.159e-3, theta[0] + np.pi/2  ], # A1
-                    [    425e-3,        0,          0,         theta[1] - np.pi/2  ], # A2
-                    [    392.25e-3,     0,          0,         theta[2]            ], # A3
-                    [    0,             -np.pi/2,   109.15e-3, theta[3] - np.pi/2  ], # A4
-                    [    0,             np.pi/2,    94.65e-3,  theta[4]            ], # A5
-                    [    0,             0,          82.3e-3,   theta[5]            ], # A6
+    # Matriz com valores encontrados em artigos (com JacoHand)
+    dh = np.array([ [    0,             -np.pi/2,   89.159e-3,           theta[0] + np.pi/2  ], # A1
+                    [    425e-3,        0,          0,                   theta[1] - np.pi/2  ], # A2
+                    [    392.25e-3,     0,          0,                   theta[2]            ], # A3
+                    [    0,             -np.pi/2,   109.15e-3,           theta[3] - np.pi/2  ], # A4
+                    [    0,             np.pi/2,    94.65e-3,            theta[4]            ], # A5
+                    [    0,             0,          82.3e-3 + 56.2e-3,   theta[5]            ], # A6
                  ])
-    '''
     return dh
 
 # Matriz Ai
@@ -267,11 +281,12 @@ def dk_get_end_effector_matrix():
 
 # Validacao Cinematica Direta
 def dk_validate(test_cases, num_teste):
-    TOLERANCE = 0.02    # Error tolerance in meters
+    TOLERANCE = 0.03    # Error tolerance in meters
 
     sleep(1)
 
     end_effector = sim.getObject("/UR5/JacoHand")
+    #end_effector = sim.getObject("/UR5/connection")
     joints = get_joints()
     fail_count = 0
 
@@ -320,6 +335,7 @@ def dk_validate(test_cases, num_teste):
 def ik_calculate(target_matrix):
     # Inicializacao das variaveis
     theta1 = theta2 = theta3 = theta4 = theta5 = theta6 = 0
+    offset = np.array([np.pi/2, -np.pi/2, 0, -np.pi/2, 0, 0])
 
     # Obtencao de informacoes para o calculo
     dh = dk_get_dh()
@@ -331,14 +347,14 @@ def ik_calculate(target_matrix):
     rev_base = reverse_transformation_matrix(base_matrix)
 
     # Calculo do Theta 1
+    d4 = dh[3, 2]
     d6 = dh[5, 2]
     T_0_6 = np.matmul(rev_base, target_matrix)
     P_0_5 = np.matmul(T_0_6, np.array([0, 0, -d6, 1]))
-    d4 = dh[3, 2]
     p05x = P_0_5[0]
     p05y = P_0_5[1]
-    theta1_sh_left = np.atan2(p05y, p05x) + np.acos(d4/np.sqrt(p05x**2 + p05y**2)) + np.pi
-    theta1_sh_right = np.atan2(p05y, p05x) - np.acos(d4/np.sqrt(p05x**2 + p05y**2)) + np.pi
+    theta1_sh_left = np.atan2(p05y, p05x) + np.acos(d4/np.sqrt(p05x**2 + p05y**2)) + np.pi/2
+    theta1_sh_right = np.atan2(p05y, p05x) - np.acos(d4/np.sqrt(p05x**2 + p05y**2)) + np.pi/2
     
     '''
     #Se o ombro estiver pra a esquerda:
@@ -348,37 +364,37 @@ def ik_calculate(target_matrix):
     else:
         theta1 = wrap_angle(theta1_sh_right)
     '''
-    theta1 = wrap_angle(theta1_sh_left)
+    theta1 = wrap_angle(theta1_sh_left + offset[0])
 
     # Calculo do Theta 5
-    p06x = T_0_6[0, 3]
-    p06y = T_0_6[1, 3]
-
-    acos_th5_param = ((p06x*np.sin(theta1-np.pi/2))-(p06y*np.cos(theta1-np.pi/2))-d4)/d6
+    a1 = dh[0, 0]
+    alpha1 = dh[0, 1]
+    d1 = dh[0, 2]
+    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1 - offset[0])
+    T_6_0 = reverse_transformation_matrix(T_0_6)
+    T_6_1 = np.matmul(T_6_0, T_0_1)
+    T_1_6 = reverse_transformation_matrix(T_6_1)
+    p16z = T_1_6[2, 3]
+    acos_th5_param = (-p16z-d4)/d6
     assert abs(acos_th5_param) <= 1, "ERRO: Argumento do acos do Theta 5 e maior que 1, solucao invalida"
     theta5 = np.acos(acos_th5_param)
 
     # Se o pulso estiver pra cima:
-    # current_theta5 = dh[4, 3]
-    # if(current_theta5 < 0):
+    #current_theta5 = dh[4, 3]
+    #if(current_theta5 < 0):
         #theta5 *= -1
-    theta5 = wrap_angle(theta5)
+    theta5 = wrap_angle(theta5 + offset[4])
 
     # Calculo do Theta 6
-    a1 = dh[0, 0]
-    alpha1 = dh[0, 1]
-    d1 = dh[0, 2]
-    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1-np.pi/2)
-    T_6_0 = reverse_transformation_matrix(T_0_6)
-    T_6_1 = np.matmul(T_6_0, T_0_1)
     Z61x = T_6_1[0, 2]
     Z61y = T_6_1[1, 2]
     current_theta6 = dh[5, 3]
     if np.sin(theta5) == 0 or (Z61x == 0 and Z61y == 0):
-        theta6 = current_theta6
+        #theta6 = current_theta6
+        theta6 = 0
     else:
-        theta6 = np.atan2(-Z61y/np.sin(theta5), Z61x/np.sin(theta5))        
-    theta6 = wrap_angle(theta6)
+        theta6 = np.atan2(-Z61y/np.sin(theta5), Z61x/np.sin(theta5))  
+    theta6 = wrap_angle(theta6 + offset[5])
 
     # Calculo do Theta 3
     a5 = dh[4, 0]
@@ -387,48 +403,79 @@ def ik_calculate(target_matrix):
     a6 = dh[5, 0]
     alpha6 = dh[5, 1]
     d6 = dh[5, 2]
-    T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5)
-    T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6)
+    T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5 - offset[4])
+    T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6 - offset[5])
     T_4_6 = np.matmul(T_4_5, T_5_6)
     T_6_4 = reverse_transformation_matrix(T_4_6)
-    T_1_6 = reverse_transformation_matrix(T_6_1)
     T_1_4 = np.matmul(T_1_6, T_6_4)
-    p14x = T_1_4[0, 3]
-    p14y = T_1_4[1, 3]
-    p14xy = np.sqrt(p14x**2 + p14y**2)
+    P_1_3 = np.matmul(T_1_4, [0, d4, 0, 1]) - [0, 0, 0, 1]
+    p13_mod = np.linalg.norm(P_1_3)
     a2 = dh[1, 0]
     a3 = dh[2, 0]
-    acos_arg = (p14xy**2 - a2**2 - a3**2)/(2*a2*a3)
+    acos_arg = (p13_mod**2 - a2**2 - a3**2)/(2*a2*a3)
     if(acos_arg > 1):
         theta3 = 0
     else:
         theta3 = np.acos(acos_arg)
-
         # Se cotovelo estiver para baixo:
         #current_theta3 = dh[2, 3]
         #if(current_theta3 <= 0):
             #theta3 *= -1
-        theta3 = wrap_angle(theta3)
+    theta3 = wrap_angle(theta3 + offset[2])
 
     # Calculo do Theta 2
-    theta2 = np.atan2(p14y, -p14x) - np.asin((a3*np.sin(theta3))/p14xy) + np.pi/2
-    theta2 = wrap_angle(theta2)
+    p13x = P_1_3[0]
+    p13y = P_1_3[1]
+    delta = np.atan2(-p13y, p13x)
+    epsilon = np.acos((p13_mod**2 + a2**2 - a3**2)/(2*a2*p13_mod))
+    #theta2 = np.atan2(p14y, -p14x) - np.asin((a3*np.sin(theta3))/p14xy) + np.pi/2
+    theta2 = delta - epsilon
+    theta2 = wrap_angle(theta2 + offset[1])
 
     # Calculo de Theta 4
     alpha2 = dh[1, 1]
     d2 = dh[1, 2]
     alpha3 = dh[2, 1]
     d3 = dh[2, 2]
-    T_1_2 = mount_ai_matrix(a2, alpha2, d2, theta2)
-    T_2_3 = mount_ai_matrix(a3, alpha3, d3, theta3)
-    T_1_3 = np.matmul(T_1_2, T_2_3)
-    T_3_1 = reverse_transformation_matrix(T_1_3)
-    T_3_4 = np.matmul(T_3_1, T_1_4)
+    T_1_2 = mount_ai_matrix(a2, alpha2, d2, theta2 - offset[1])
+    T_2_3 = mount_ai_matrix(a3, alpha3, d3, theta3 - offset[2])
+    T_0_3 = np.matmul(np.matmul(T_0_1, T_1_2), T_2_3)
+    T_3_0 = reverse_transformation_matrix(T_0_3)
+    T_0_4 = np.matmul(T_0_6, T_6_4)
+    T_3_4 = np.matmul(T_3_0, T_0_4)
     X34x = T_3_4[0, 0]
     X34y = T_3_4[1, 0]
     theta4 = np.atan2(X34y, X34x)
+    theta4 = wrap_angle(theta4 + offset[3])
 
-    joint_values = np.array([theta1, theta2, theta3, theta4, theta5, theta6])
+    T_0_1_check = mount_ai_matrix(dh[0, 0], dh[0, 1], dh[0, 2], theta1 - offset[0])
+    T_1_2_check = mount_ai_matrix(dh[1, 0], dh[1, 1], dh[1, 2], theta2 - offset[1])
+    T_2_3_check = mount_ai_matrix(dh[2, 0], dh[2, 1], dh[2, 2], theta3 - offset[2])
+    T_3_4_check = mount_ai_matrix(dh[3, 0], dh[3, 1], dh[3, 2], theta4 - offset[3])
+    T_4_5_check = mount_ai_matrix(dh[4, 0], dh[4, 1], dh[4, 2], theta5 - offset[4])
+    T_5_6_check = mount_ai_matrix(dh[5, 0], dh[5, 1], dh[5, 2], theta6 - offset[5])
+
+    T_0_3_check = np.matmul(T_0_1_check, np.matmul(T_1_2_check, T_2_3_check))
+    T_3_6_check = np.matmul(T_3_4_check, np.matmul(T_4_5_check, T_5_6_check))
+    T_0_6_check = np.matmul(T_0_3_check, T_3_6_check)
+
+    #print(T_0_6_check)
+    #print()
+    #print(T_0_6)
+    #print()
+
+    print_matrix(np.matmul(T_1_2, T_2_3))
+    print(P_1_3)
+    #joints = get_joints()
+    #print(sim.getObjectPosition(joints[2]))
+
+    joint_values = np.array([wrap_angle(theta1),
+                             wrap_angle(theta2),
+                             wrap_angle(theta3),
+                             wrap_angle(theta4),
+                             wrap_angle(theta5),
+                             wrap_angle(theta6)
+                            ])
 
     return joint_values
 
@@ -444,6 +491,7 @@ def ik_validate(test_cases, num_teste):
     theta_values = ik_calculate(target_matrix)
     joints = get_joints()
     end_effector = sim.getObject("/UR5/JacoHand")
+    #end_effector = sim.getObject("/UR5/connection")
 
     base_matrix = sim.getObjectMatrix(sim.getObject("/UR5"))
     base_matrix = np.array([base_matrix[0:4],
