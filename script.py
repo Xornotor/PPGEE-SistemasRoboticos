@@ -408,19 +408,20 @@ def ik_calculate(target_matrix):
     a6 = dh[5, 0]
     alpha6 = dh[5, 1]
     d6 = dh[5, 2]
-    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1)
+    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1 - offset[0])
     T_6_1 = np.matmul(T_6_0, T_0_1)
     T_1_6 = reverse_transformation_matrix(T_6_1)
-    T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5)
-    T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6)
+    T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5 - offset[4])
+    T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6 - offset[5])
     T_4_6 = np.matmul(T_4_5, T_5_6)
     T_6_4 = reverse_transformation_matrix(T_4_6)
     T_1_4 = np.matmul(T_1_6, T_6_4)
-    P_1_3 = np.matmul(T_1_4, [0, d4, 0, 1]) - [0, 0, 0, 1]
-    p13_mod = np.linalg.norm(P_1_3)
+    p14x = T_1_4[0, 3]
+    p14y = T_1_4[1, 3]
+    p14xy = np.sqrt(p14x**2 + p14y**2)
     a2 = dh[1, 0]
     a3 = dh[2, 0]
-    acos_arg = (p13_mod**2 - a2**2 - a3**2)/(2*a2*a3)
+    acos_arg = (p14xy**2 - a2**2 - a3**2)/(2*a2*a3)
     if(acos_arg > 1):
         theta3 = 0
     else:
@@ -434,10 +435,8 @@ def ik_calculate(target_matrix):
     theta3 = wrap_angle(theta3 + offset[2])
 
     # Calculo do Theta 2
-    p13x = P_1_3[0]
-    p13y = P_1_3[1]
-    delta = np.atan2(-p13y, p13x)
-    epsilon = np.acos((p13_mod**2 + a2**2 - a3**2)/(2*a2*p13_mod))
+    delta = np.atan2(-p14y, p14x)
+    epsilon = np.acos((p14xy**2 + a2**2 - a3**2)/(2*a2*p14xy))
     #theta2 = np.atan2(p14y, -p14x) - np.asin((a3*np.sin(theta3))/p14xy) + np.pi/2
     theta2 = delta - epsilon
     theta2 = wrap_angle(theta2 + offset[1])
