@@ -165,7 +165,7 @@ def mount_ai_matrix(a, alpha, d, theta):
 def reverse_transformation_matrix(matrix):
     rev_matrix = np.identity(4)
     rev_matrix[:3, :3] = np.array(matrix)[:3, :3].T
-    rev_matrix[:3, 3] = np.matmul(rev_matrix[:3, :3], np.array(matrix)[:3, 3]) * (-1)
+    rev_matrix[:3, 3] = np.matmul(-rev_matrix[:3, :3], np.array(matrix)[:3, 3])
     return rev_matrix
 
 # Converte target_pose (X, Y, Z, R, P, Y) para matriz de transformacao
@@ -198,7 +198,10 @@ def matrix2pose(target_matrix):
 def print_matrix(m):
     print(m)
     print(np.linalg.norm(m[:, 3] - np.array([0,0,0,1])))
-    print(matrix2pose(m))
+    pose = matrix2pose(m)
+    for i in range(3, 6):
+        pose[i] *= 180/np.pi
+    print(pose)
     print()
 
 #-----------------------------------------------#
@@ -367,44 +370,49 @@ def ik_calculate(target_matrix):
     theta1 = wrap_angle(theta1_sh_left + offset[0])
 
     # Calculo do Theta 5
-    a1 = dh[0, 0]
-    alpha1 = dh[0, 1]
-    d1 = dh[0, 2]
-    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1 - offset[0])
-    T_6_0 = reverse_transformation_matrix(T_0_6)
-    T_6_1 = np.matmul(T_6_0, T_0_1)
-    T_1_6 = reverse_transformation_matrix(T_6_1)
-    p16z = T_1_6[2, 3]
-    acos_th5_param = (-p16z-d4)/d6
+    p06x = T_0_6[0, 3]
+    p06y = T_0_6[1, 3]
+    acos_th5_param = (p06x*np.sin(theta1-offset[0])-p06y*np.cos(theta1-offset[0])-d4)/d6
     assert abs(acos_th5_param) <= 1, "ERRO: Argumento do acos do Theta 5 e maior que 1, solucao invalida"
     theta5 = np.acos(acos_th5_param)
 
+    '''
     # Se o pulso estiver pra cima:
-    #current_theta5 = dh[4, 3]
-    #if(current_theta5 < 0):
-        #theta5 *= -1
+    current_theta5 = dh[4, 3]
+    if(current_theta5 < 0):
+        theta5 *= -1
+    '''
     theta5 = wrap_angle(theta5 + offset[4])
 
     # Calculo do Theta 6
-    Z61x = T_6_1[0, 2]
-    Z61y = T_6_1[1, 2]
-    current_theta6 = dh[5, 3]
-    if np.sin(theta5) == 0 or (Z61x == 0 and Z61y == 0):
-        #theta6 = current_theta6
+    T_6_0 = reverse_transformation_matrix(T_0_6)
+    X60x = T_6_0[0, 0]
+    X60y = T_6_0[1, 0]
+    Y60x = T_6_0[0, 1]
+    Y60y = T_6_0[1, 1]
+    atan_th6_first = -X60y*np.sin(theta1-offset[0]) + Y60y*np.cos(theta1-offset[0])
+    atan_th6_second = X60x*np.sin(theta1-offset[0]) - Y60x*np.cos(theta1-offset[0])
+    if np.sin(theta5) == 0 or (atan_th6_first == 0 and atan_th6_second == 0):
         theta6 = 0
-    else:
-        theta6 = np.atan2(-Z61y/np.sin(theta5), Z61x/np.sin(theta5))  
+    else:        
+        theta6 = np.atan2(atan_th6_first/np.sin(theta5), atan_th6_second/np.sin(theta5))  
     theta6 = wrap_angle(theta6 + offset[5])
 
     # Calculo do Theta 3
+    a1 = dh[0, 0]
+    alpha1 = dh[0, 1]
+    d1 = dh[0, 2]
     a5 = dh[4, 0]
     alpha5 = dh[4, 1]
     d5 = dh[4, 2]
     a6 = dh[5, 0]
     alpha6 = dh[5, 1]
     d6 = dh[5, 2]
-    T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5 - offset[4])
-    T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6 - offset[5])
+    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1)
+    T_6_1 = np.matmul(T_6_0, T_0_1)
+    T_1_6 = reverse_transformation_matrix(T_6_1)
+    T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5)
+    T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6)
     T_4_6 = np.matmul(T_4_5, T_5_6)
     T_6_4 = reverse_transformation_matrix(T_4_6)
     T_1_4 = np.matmul(T_1_6, T_6_4)
@@ -417,10 +425,12 @@ def ik_calculate(target_matrix):
         theta3 = 0
     else:
         theta3 = np.acos(acos_arg)
+        '''
         # Se cotovelo estiver para baixo:
-        #current_theta3 = dh[2, 3]
-        #if(current_theta3 <= 0):
-            #theta3 *= -1
+        current_theta3 = dh[2, 3]
+        if(current_theta3 <= 0):
+            theta3 *= -1
+        '''
     theta3 = wrap_angle(theta3 + offset[2])
 
     # Calculo do Theta 2
@@ -448,12 +458,12 @@ def ik_calculate(target_matrix):
     theta4 = np.atan2(X34y, X34x)
     theta4 = wrap_angle(theta4 + offset[3])
 
-    T_0_1_check = mount_ai_matrix(dh[0, 0], dh[0, 1], dh[0, 2], theta1 - offset[0])
-    T_1_2_check = mount_ai_matrix(dh[1, 0], dh[1, 1], dh[1, 2], theta2 - offset[1])
-    T_2_3_check = mount_ai_matrix(dh[2, 0], dh[2, 1], dh[2, 2], theta3 - offset[2])
-    T_3_4_check = mount_ai_matrix(dh[3, 0], dh[3, 1], dh[3, 2], theta4 - offset[3])
-    T_4_5_check = mount_ai_matrix(dh[4, 0], dh[4, 1], dh[4, 2], theta5 - offset[4])
-    T_5_6_check = mount_ai_matrix(dh[5, 0], dh[5, 1], dh[5, 2], theta6 - offset[5])
+    T_0_1_check = mount_ai_matrix(dh[0, 0], dh[0, 1], dh[0, 2], theta1)
+    T_1_2_check = mount_ai_matrix(dh[1, 0], dh[1, 1], dh[1, 2], theta2)
+    T_2_3_check = mount_ai_matrix(dh[2, 0], dh[2, 1], dh[2, 2], theta3)
+    T_3_4_check = mount_ai_matrix(dh[3, 0], dh[3, 1], dh[3, 2], theta4)
+    T_4_5_check = mount_ai_matrix(dh[4, 0], dh[4, 1], dh[4, 2], theta5)
+    T_5_6_check = mount_ai_matrix(dh[5, 0], dh[5, 1], dh[5, 2], theta6)
 
     T_0_3_check = np.matmul(T_0_1_check, np.matmul(T_1_2_check, T_2_3_check))
     T_3_6_check = np.matmul(T_3_4_check, np.matmul(T_4_5_check, T_5_6_check))
@@ -464,10 +474,7 @@ def ik_calculate(target_matrix):
     #print(T_0_6)
     #print()
 
-    print_matrix(np.matmul(T_1_2, T_2_3))
-    print(P_1_3)
-    #joints = get_joints()
-    #print(sim.getObjectPosition(joints[2]))
+    #print_matrix(T_3_4)
 
     joint_values = np.array([wrap_angle(theta1),
                              wrap_angle(theta2),
