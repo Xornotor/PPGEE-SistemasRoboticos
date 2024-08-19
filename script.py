@@ -12,6 +12,7 @@ Data: 14 ago 2024
 
 import numpy as np
 from time import sleep
+np.set_printoptions(suppress=True)
 
 #-----------------------------------------------#
 #---------------Variaveis Globais---------------#
@@ -38,7 +39,7 @@ TESTES_DH = np.array([
 NUM_TESTES_DH = TESTES_DH.shape[0] # Quantidade de casos de teste da C.D.
 
 # Array de casos de teste da C.I (X, Y, Z, Roll, Pitch, Yaw)
-'''
+
 TESTES_IK = np.array([
                         [   -0.4,      -0.4,      1.46,      0.4,      0.82,       0.9    ],
                         [   -0.4,      0.4,       1.37,      0.4,      0.82,       0.9    ],
@@ -46,15 +47,16 @@ TESTES_IK = np.array([
 '''
 
 TESTES_IK = []
-for i in range(10):
+for i in range(8):
     TESTES_IK.append(np.array([0.3*np.sin((i+1)*(0.07)) - 0.4,
                                0.3*np.sin((i+1)*(-0.07)) - 0.3,
                                (i+1)*(0.01) + 1.5,
                                0, #(i+1)*(-0.03),
-                               np.pi/4, #(i+1)*0.03,
+                               np.pi/2, #(i+1)*0.03,
                                0, #(i+1)*(-0.03)
                                ]))
-    
+'''
+
 TESTES_IK = np.array(TESTES_IK)
 
 NUM_TESTES_IK = TESTES_IK.shape[0]
@@ -373,7 +375,7 @@ def ik_calculate(target_matrix):
     # Calculo do Theta 5
     p06x = T_0_6[0, 3]
     p06y = T_0_6[1, 3]
-    acos_th5_param = (p06x*np.sin(theta1-offset[0])-p06y*np.cos(theta1-offset[0])-d4)/d6
+    acos_th5_param = (p06x*np.sin(theta1 - offset[0])-p06y*np.cos(theta1 - offset[0])-d4)/d6
     assert abs(acos_th5_param) <= 1, "ERRO: Argumento do acos do Theta 5 e maior que 1, solucao invalida"
     theta5 = np.acos(acos_th5_param)
 
@@ -391,8 +393,8 @@ def ik_calculate(target_matrix):
     X60y = T_6_0[1, 0]
     Y60x = T_6_0[0, 1]
     Y60y = T_6_0[1, 1]
-    atan_th6_first = -X60y*np.sin(theta1-offset[0]) + Y60y*np.cos(theta1-offset[0])
-    atan_th6_second = X60x*np.sin(theta1-offset[0]) - Y60x*np.cos(theta1-offset[0])
+    atan_th6_first = -X60y*np.sin(theta1 - offset[0]) + Y60y*np.cos(theta1 - offset[0])
+    atan_th6_second = X60x*np.sin(theta1 - offset[0]) - Y60x*np.cos(theta1 - offset[0])
     if np.sin(theta5) == 0 or (atan_th6_first == 0 and atan_th6_second == 0):
         theta6 = 0
     else:        
@@ -409,11 +411,11 @@ def ik_calculate(target_matrix):
     a6 = dh[5, 0]
     alpha6 = dh[5, 1]
     d6 = dh[5, 2]
-    T_0_1 = mount_ai_matrix(a1, alpha1, d1, theta1 - offset[0])
+    T_0_1 = mount_ai_matrix(a1, -alpha1, d1, theta1 - offset[0])
     T_6_1 = np.matmul(T_6_0, T_0_1)
     T_1_6 = reverse_transformation_matrix(T_6_1)
-    T_4_5 = mount_ai_matrix(a5, alpha5, d5, theta5 - offset[4])
-    T_5_6 = mount_ai_matrix(a6, alpha6, d6, theta6 - offset[5])
+    T_4_5 = mount_ai_matrix(a5, -alpha5, d5, theta5 - offset[4])
+    T_5_6 = mount_ai_matrix(a6, -alpha6, d6, theta6 - offset[5])
     T_4_6 = np.matmul(T_4_5, T_5_6)
     T_6_4 = reverse_transformation_matrix(T_4_6)
     T_1_4 = np.matmul(T_1_6, T_6_4)
@@ -436,30 +438,61 @@ def ik_calculate(target_matrix):
     theta3 = wrap_angle(theta3 + offset[2])
 
     # Calculo do Theta 2
-    delta = np.atan2(-p14y, p14x)
-    epsilon = np.acos((p14xy**2 + a2**2 - a3**2)/(2*a2*p14xy))
+    delta = np.atan2(p14y, p14x)
+    #epsilon = np.acos((p14xy**2 + a2**2 - a3**2)/(2*a2*p14xy))
+    epsilon = np.asin((a3*np.sin(theta3))/p14xy)
     #theta2 = np.atan2(p14y, -p14x) - np.asin((a3*np.sin(theta3))/p14xy) + np.pi/2
     theta2 = delta - epsilon
     theta2 = wrap_angle(theta2 + offset[1])
+    #print(delta, epsilon, delta-epsilon, theta2)
 
     # Calculo de Theta 4
     alpha2 = dh[1, 1]
     d2 = dh[1, 2]
     alpha3 = dh[2, 1]
     d3 = dh[2, 2]
-    T_1_2 = mount_ai_matrix(a2, alpha2, d2, theta2 - offset[1])
-    T_2_3 = mount_ai_matrix(a3, alpha3, d3, theta3 - offset[2])
+    T_1_2 = mount_ai_matrix(-a2, -alpha2, d2, theta2 - offset[1])
+    T_2_3 = mount_ai_matrix(-a3, -alpha3, d3, theta3 - offset[2])
     T_0_3 = np.matmul(np.matmul(T_0_1, T_1_2), T_2_3)
     T_3_0 = reverse_transformation_matrix(T_0_3)
     T_0_4 = np.matmul(T_0_6, T_6_4)
     T_3_4 = np.matmul(T_3_0, T_0_4)
+    #print(T_3_4)
     X34x = T_3_4[0, 0]
     X34y = T_3_4[1, 0]
     theta4 = np.atan2(X34y, X34x)
     theta4 = wrap_angle(theta4 + offset[3])
 
-    #print_matrix(np.matmul(np.matmul(T_0_1, T_1_2), T_2_3))
-    #print_matrix(np.matmul(T_0_1, T_1_2))
+    '''
+    #print_matrix(T_1_2)
+    #print_matrix(T_2_3)
+    print_matrix(T_0_1)
+    print()
+    print_matrix(T_1_2)
+    print()
+    print_matrix(T_2_3)
+    print()
+    print_matrix(T_3_4)
+    print()
+    print_matrix(T_4_5)
+    print()
+    print_matrix(T_5_6)
+    '''
+
+    '''
+    print_matrix(np.matmul(base_matrix, T_0_1))
+    print()
+    print_matrix(np.matmul(base_matrix, np.matmul(T_0_1, T_1_2)))
+    print()
+    print_matrix(np.matmul(base_matrix, np.matmul(np.matmul(T_0_1, T_1_2), T_2_3)))
+    print()
+    print_matrix(np.matmul(base_matrix, np.matmul(np.matmul(T_0_1, T_1_2), np.matmul(T_2_3, T_3_4))))
+    print()
+    print_matrix(np.matmul(base_matrix, np.matmul(np.matmul(T_0_1, T_1_2), np.matmul(np.matmul(T_2_3, T_3_4), T_4_5))))
+    print()
+    print_matrix(np.matmul(base_matrix, T_0_6))
+    print()
+    '''
 
     joint_values = np.array([wrap_angle(theta1),
                              wrap_angle(theta2),
@@ -476,7 +509,7 @@ def ik_validate(test_cases, num_teste):
     TOLERANCE_POS = 0.03    # Error tolerance in meters
     TOLERANCE_ORIENT = 0.03 # Error tolerance in radians
 
-    sleep(1)
+    sleep(.2)
 
     target_pose = test_cases[num_teste]
     target_matrix = pose2matrix(target_pose)
