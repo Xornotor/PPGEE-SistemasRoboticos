@@ -3,7 +3,7 @@ PPGEE - Departamento de Engenharia Eletrica e de Computacao - UFBA
 UR5: Cinematica Direta, Inversa e Planejamento de Trajetoria
 Alunos: Andre Paiva Conrado Rodrigues e Gabriel Lucas Nascimento Silva
 Disciplina: Sistemas Roboticos - 2024.1
-Data: 14 ago 2024
+Data: 19 ago 2024
 '''
 
 #-----------------------------------------------#
@@ -19,35 +19,48 @@ np.set_printoptions(suppress=True)
 #-----------------------------------------------#
 SIGNAL = True
 
-FLAG_DK = True # Flag que indica se a validacao da C.D. foi concluida
-FLAG_IK = False # Flag que indica se a validacao da C.I. foi concluida
+DK_VALIDACAO = True # Flag que indica se a validacao da C.D. sera realizada
+IK_VALIDACAO = True # Flag que indica se a validacao da C.I. sera realizada
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 COUNTER_IK = 0 # Contador de casos de teste da C.I. que passaram por validacao
 
 # Array de casos de teste da C.D (J1, J2, J3, J4, J5, J6)
-TESTES_DH = np.array([  
-                        [   30,     60,     90,     0,      0,       0    ],
-                        [   0,      0,      0,      30,     60,      90   ],
-                        [   -45,    -30,    60,     15,     -30,     75   ],
-                        [   45,     -90,    75,     30,     -25,     -90  ],
-                        [   39,     42,     -80,    9,      -112,    13   ],
-                        [   -158,   97,     45,    -138,    125,     -147 ],
-                        [   130,    -20,    -50,    -45,    25,      110  ],
-                        [   0,      0,      0,      0,      0,       0    ],
-                    ])
+TESTES_DH = np.array([])
+NUM_TESTES_DH = 20  # Quantidade de casos de teste da C.D.
 
-NUM_TESTES_DH = TESTES_DH.shape[0] # Quantidade de casos de teste da C.D.
+for i in range(NUM_TESTES_DH):
+    TESTES_DH = np.append(TESTES_DH, np.random.randint(-180, 180, 6))
+
+TESTES_DH = TESTES_DH.reshape(NUM_TESTES_DH, 6)
 
 # Array de casos de teste da C.I (X, Y, Z, Alpha, Beta, Gamma)
 
 TESTES_IK = []
 for i in range(10):
-    TESTES_IK.append(np.array([0.3*np.sin((i+1)*(0.07)) - 0.4,
-                               0.3*np.sin((i+1)*(-0.07)) - 0.3,
+    TESTES_IK.append(np.array([0.3*np.sin((i+1)*(0.05)) - 0.4,
+                               0.3*np.sin((i+1)*(-0.05)) - 0.3,
                                (i+1)*(0.01) + 1.5,
-                               -2*np.pi/3, #(i+1)*(-0.03),
-                               np.pi/7, #(i+1)*0.03,
-                               3*np.pi/4, #(i+1)*(-0.03)
+                               -2*np.pi/3,
+                               np.pi/7,
+                               3*np.pi/4,
+                               ]))
+    
+for i in range(10):
+    TESTES_IK.append(np.array([0.5,
+                               0.2,
+                               1.6,
+                               (i+1)*(0.05),
+                               (i+1)*(-0.05) + np.pi/2,
+                               (i+1)*(-0.05) - 3*np.pi/4,
+                               ]))
+    
+for i in range(10):
+    TESTES_IK.append(np.array([0.4*np.sin((i+1)*(0.02)) - 0.4,
+                               0.4*np.sin((i+1)*(-0.02)) + 0.3,
+                               (i+1)*(-0.02) + 1.6,
+                               -np.pi/2,
+                               -np.pi/2,
+                               0,
                                ]))
 
 TESTES_IK = np.array(TESTES_IK)
@@ -68,19 +81,18 @@ def sysCall_init():
 
 # Validacoes implementadas no sensing
 def sysCall_sensing():
-    global FLAG_DK, COUNTER_DK, TESTES_DH, NUM_TESTES_DH
-    global FLAG_IK, COUNTER_IK, TESTES_IK, NUM_TESTES_IK
+    global DK_VALIDACAO, COUNTER_DK, TESTES_DH, NUM_TESTES_DH
+    global IK_VALIDACAO, COUNTER_IK, TESTES_IK, NUM_TESTES_IK
 
-    if((not FLAG_DK) and (not FLAG_IK)):
+    if(DK_VALIDACAO and IK_VALIDACAO):
         if(COUNTER_DK >= NUM_TESTES_DH):
-            FLAG_DK = True
+            DK_VALIDACAO = False
         else:
             dk_validate(TESTES_DH, COUNTER_DK)
             COUNTER_DK += 1
-    elif(FLAG_DK and (not FLAG_IK)):
+    elif((not DK_VALIDACAO) and IK_VALIDACAO):
         if(COUNTER_IK >= NUM_TESTES_IK):
-            sleep(1)
-            FLAG_IK = True
+            IK_VALIDACAO = False
         else:
             ik_validate(TESTES_IK, COUNTER_IK)
             COUNTER_IK += 1
@@ -96,7 +108,7 @@ def sysCall_actuation():
     '''
 
     '''
-    if(FLAG_DK and FLAG_IK):
+    if(DK_VALIDACAO and IK_VALIDACAO):
         joints = get_joints()
         for joint in joints:
             orient = sim.getJointPosition(joint)
@@ -159,7 +171,6 @@ def reverse_transformation_matrix(matrix):
 # Converte target_pose (X, Y, Z, R, P, Y) para matriz de transformacao
 def pose2matrix(target_pose, rpy=True):
     
-
     if(rpy):
         roll = target_pose[3]
         pitch = target_pose[4]
@@ -275,7 +286,7 @@ def dk_get_end_effector_matrix():
 def dk_validate(test_cases, num_teste):
     TOLERANCE = 0.03    # Error tolerance in meters
 
-    sleep(1)
+    sleep(0.5)
 
     end_effector = sim.getObject("/UR5/JacoHand")
     #end_effector = sim.getObject("/UR5/connection")
@@ -493,10 +504,9 @@ def ik_validate(test_cases, num_teste):
 
     rot_m = pose2matrix(np.array([0, 0, 0, end_orient[0], end_orient[1], end_orient[2]]), rpy=False)
     phase_z_m = pose2matrix(np.array([0, 0, 0, 0, 0, np.pi/2]))
-    rot_m = phase_z_m @ rot_m
+    rot_m = rot_m
 
     rpy_angles = matrix2pose(rot_m)[3:]
-
 
     end_ground = np.array([sim.getObjectPosition(end_effector),
                           rpy_angles]).reshape((-1))
