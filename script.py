@@ -38,24 +38,17 @@ TESTES_DH = np.array([
 
 NUM_TESTES_DH = TESTES_DH.shape[0] # Quantidade de casos de teste da C.D.
 
-# Array de casos de teste da C.I (X, Y, Z, Roll, Pitch, Yaw)
-
-TESTES_IK = np.array([
-                        [   -0.4,      -0.4,      1.46,      0.4,      0.82,       0.9    ],
-                        [   -0.4,      0.4,       1.37,      0.4,      0.82,       0.9    ],
-                    ])
-'''
+# Array de casos de teste da C.I (X, Y, Z, Alpha, Beta, Gamma)
 
 TESTES_IK = []
-for i in range(8):
+for i in range(10):
     TESTES_IK.append(np.array([0.3*np.sin((i+1)*(0.07)) - 0.4,
                                0.3*np.sin((i+1)*(-0.07)) - 0.3,
                                (i+1)*(0.01) + 1.5,
-                               0, #(i+1)*(-0.03),
-                               np.pi/2, #(i+1)*0.03,
-                               0, #(i+1)*(-0.03)
+                               -2*np.pi/3, #(i+1)*(-0.03),
+                               np.pi/7, #(i+1)*0.03,
+                               3*np.pi/4, #(i+1)*(-0.03)
                                ]))
-'''
 
 TESTES_IK = np.array(TESTES_IK)
 
@@ -91,13 +84,6 @@ def sysCall_sensing():
         else:
             ik_validate(TESTES_IK, COUNTER_IK)
             COUNTER_IK += 1
-
-    '''
-    print(ik_calculate(dk_get_end_effector_matrix()))
-    print(read_joints_sensors())
-    #print(ik_calculate(dk_get_end_effector_matrix()) - read_joints_sensors())
-    print()
-    '''
 
 # Atuacao step-by-step
 def sysCall_actuation():
@@ -171,16 +157,27 @@ def reverse_transformation_matrix(matrix):
     return rev_matrix
 
 # Converte target_pose (X, Y, Z, R, P, Y) para matriz de transformacao
-def pose2matrix(target_pose):
-    roll = target_pose[3]
-    pitch = target_pose[4]
-    yaw = target_pose[5]
+def pose2matrix(target_pose, rpy=True):
+    
 
-    roll_matrix = np.array([[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]]) 
-    pitch_matrix = np.array([[np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-np.sin(pitch), 0, np.cos(pitch)]]) 
-    yaw_matrix = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
+    if(rpy):
+        roll = target_pose[3]
+        pitch = target_pose[4]
+        yaw = target_pose[5]
+        roll_matrix = np.array([[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]]) 
+        pitch_matrix = np.array([[np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-np.sin(pitch), 0, np.cos(pitch)]]) 
+        yaw_matrix = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
 
-    r_matrix = np.matmul(np.matmul(yaw_matrix, pitch_matrix), roll_matrix)
+        r_matrix = np.matmul(np.matmul(yaw_matrix, pitch_matrix), roll_matrix)
+    else:
+        alpha = target_pose[3]
+        beta = target_pose[4]
+        gamma = target_pose[5]
+        alpha_matrix = np.array([[1, 0, 0], [0, np.cos(alpha), -np.sin(alpha)], [0, np.sin(alpha), np.cos(alpha)]]) 
+        beta_matrix = np.array([[np.cos(beta), 0, np.sin(beta)], [0, 1, 0], [-np.sin(beta), 0, np.cos(beta)]]) 
+        gamma_matrix = np.array([[np.cos(gamma), -np.sin(gamma), 0], [np.sin(gamma), np.cos(gamma), 0], [0, 0, 1]])
+
+        r_matrix = np.matmul(np.matmul(alpha_matrix, beta_matrix), gamma_matrix)
 
     t_matrix = np.identity(4)
     t_matrix[:3, :3] = r_matrix
@@ -215,17 +212,6 @@ def print_matrix(m):
 def dk_get_dh():
     theta = read_joints_sensors()
 
-    '''
-    # Matriz adaptada para modelo do CoppeliaSim (com JacoHand)
-    dh = np.array([ [    0,             -np.pi/2,   74.55e-3,            theta[0] + np.pi/2  ], # A1
-                    [    425.1e-3,      0,          0,                   theta[1] - np.pi/2  ], # A2
-                    [    392.15e-3,     0,          0,                   theta[2]            ], # A3
-                    [    0,             -np.pi/2,   103.13e-3,           theta[3] - np.pi/2  ], # A4
-                    [    0,             np.pi/2,    87.88e-3,            theta[4]            ], # A5
-                    [    0,             0,          81.82e-3 + 56.2e-3,  theta[5]            ], # A6
-                 ])
-    
-    '''
     # Matriz com valores encontrados em artigos (com JacoHand)
     dh = np.array([ [    0,             -np.pi/2,   89.159e-3,           theta[0] + np.pi/2  ], # A1
                     [    425e-3,        0,          0,                   theta[1] - np.pi/2  ], # A2
@@ -463,37 +449,6 @@ def ik_calculate(target_matrix):
     theta4 = np.atan2(X34y, X34x)
     theta4 = wrap_angle(theta4 + offset[3])
 
-    '''
-    #print_matrix(T_1_2)
-    #print_matrix(T_2_3)
-    print_matrix(T_0_1)
-    print()
-    print_matrix(T_1_2)
-    print()
-    print_matrix(T_2_3)
-    print()
-    print_matrix(T_3_4)
-    print()
-    print_matrix(T_4_5)
-    print()
-    print_matrix(T_5_6)
-    '''
-
-    '''
-    print_matrix(np.matmul(base_matrix, T_0_1))
-    print()
-    print_matrix(np.matmul(base_matrix, np.matmul(T_0_1, T_1_2)))
-    print()
-    print_matrix(np.matmul(base_matrix, np.matmul(np.matmul(T_0_1, T_1_2), T_2_3)))
-    print()
-    print_matrix(np.matmul(base_matrix, np.matmul(np.matmul(T_0_1, T_1_2), np.matmul(T_2_3, T_3_4))))
-    print()
-    print_matrix(np.matmul(base_matrix, np.matmul(np.matmul(T_0_1, T_1_2), np.matmul(np.matmul(T_2_3, T_3_4), T_4_5))))
-    print()
-    print_matrix(np.matmul(base_matrix, T_0_6))
-    print()
-    '''
-
     joint_values = np.array([wrap_angle(theta1),
                              wrap_angle(theta2),
                              wrap_angle(theta3),
@@ -512,7 +467,7 @@ def ik_validate(test_cases, num_teste):
     sleep(.2)
 
     target_pose = test_cases[num_teste]
-    target_matrix = pose2matrix(target_pose)
+    target_matrix = pose2matrix(target_pose, rpy=False)
     theta_values = ik_calculate(target_matrix)
     joints = get_joints()
     end_effector = sim.getObject("/UR5/JacoHand")
@@ -532,12 +487,19 @@ def ik_validate(test_cases, num_teste):
 
     for joint, value in zip(joints, theta_values):
         sim.setJointPosition(joint, value)
+
     end_orient = sim.getObjectOrientation(end_effector)
-    end_orient = np.array(sim.alphaBetaGammaToYawPitchRoll(end_orient[0],
-                                                           end_orient[1],
-                                                           end_orient[2]))
+    end_orient = sim.yawPitchRollToAlphaBetaGamma(end_orient[2], end_orient[1], end_orient[0])
+
+    rot_m = pose2matrix(np.array([0, 0, 0, end_orient[0], end_orient[1], end_orient[2]]), rpy=False)
+    phase_z_m = pose2matrix(np.array([0, 0, 0, 0, 0, np.pi/2]))
+    rot_m = phase_z_m @ rot_m
+
+    rpy_angles = matrix2pose(rot_m)[3:]
+
+
     end_ground = np.array([sim.getObjectPosition(end_effector),
-                          end_orient[::-1]]).reshape((-1))
+                          rpy_angles]).reshape((-1))
 
     end_diff = np.array([
                          target_pose[0] - end_ground[0],
