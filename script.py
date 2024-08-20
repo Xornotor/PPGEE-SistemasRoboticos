@@ -19,8 +19,9 @@ np.set_printoptions(suppress=True)
 #-----------------------------------------------#
 SIGNAL = True
 
-DK_VALIDACAO = False # Flag que indica se a validacao da C.D. sera realizada
+DK_VALIDACAO = True # Flag que indica se a validacao da C.D. sera realizada
 IK_VALIDACAO = True # Flag que indica se a validacao da C.I. sera realizada
+FALHA_VALIDACAO = False # Flag que indica que houve alguma falha em alguma validacao
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 COUNTER_IK = 0 # Contador de casos de teste da C.I. que passaram por validacao
 
@@ -42,11 +43,11 @@ for i in range(10):
     TESTES_IK.append(np.array([0.3*np.sin((i+1)*(0.05)) - 0.4,
                                0.3*np.sin((i+1)*(-0.05)) - 0.3,
                                (i+1)*(0.01) + 1.5,
-                               np.pi/3, #-2*np.pi/3,
-                               np.pi/2, #np.pi/7,
+                               np.pi/2, #-2*np.pi/3,
+                               2*np.pi/3, #np.pi/7,
                                np.pi/5 #3*np.pi/4,
                                ]))
-    
+
 for i in range(10):
     TESTES_IK.append(np.array([0.5,
                                0.2,
@@ -56,6 +57,7 @@ for i in range(10):
                                (i+1)*(-0.05) - 3*np.pi/4,
                                ]))
 
+
 for i in range(10):
     TESTES_IK.append(np.array([0.4*np.sin((i+1)*(0.02)) - 0.4,
                                0.4*np.sin((i+1)*(-0.02)) + 0.3,
@@ -64,6 +66,15 @@ for i in range(10):
                                -3*np.pi/5,
                                np.pi/5,
                                ]))
+    
+for i in range(10):
+    TESTES_IK.append(np.array([0.5*np.sin((i+1)*(0.04)) + 0.2,
+                               0.3*np.sin((i+1)*(-0.03)) + 0.5,
+                               (i+1)*(-0.02) + 1.6,
+                               (i+1)*(0.08) - 2*np.pi/3,
+                               (i+1)*(-0.07) + 3*np.pi/4,
+                               (i+1)*(-0.06) - 3*np.pi/5
+                              ]))
 
 TESTES_IK = np.array(TESTES_IK)
 
@@ -85,6 +96,7 @@ def sysCall_init():
 def sysCall_sensing():
     global DK_VALIDACAO, COUNTER_DK, TESTES_DH, NUM_TESTES_DH
     global IK_VALIDACAO, COUNTER_IK, TESTES_IK, NUM_TESTES_IK
+    global FALHA_VALIDACAO
 
     if(DK_VALIDACAO and IK_VALIDACAO):
         if(COUNTER_DK >= NUM_TESTES_DH):
@@ -94,8 +106,14 @@ def sysCall_sensing():
             COUNTER_DK += 1
     elif((not DK_VALIDACAO) and IK_VALIDACAO):
         if(COUNTER_IK >= NUM_TESTES_IK):
-            #IK_VALIDACAO = False
-            COUNTER_IK = 0
+            IK_VALIDACAO = False
+            print(f"========================================================")
+            print("Veredito final:")
+            if(FALHA_VALIDACAO):
+                print("FALHA na validacao das Cinematicas.")
+            else:
+                print("Cinematicas validadas com SUCESSO.")
+            print(f"========================================================")
         else:
             ik_validate(TESTES_IK, COUNTER_IK)
             COUNTER_IK += 1
@@ -173,7 +191,6 @@ def reverse_transformation_matrix(matrix):
 
 # Converte target_pose (X, Y, Z, R, P, Y) para matriz de transformacao
 def pose2matrix(target_pose, rpy=True):
-    
     if(rpy):
         roll = target_pose[3]
         pitch = target_pose[4]
@@ -287,6 +304,8 @@ def dk_get_end_effector_matrix():
 
 # Validacao Cinematica Direta
 def dk_validate(test_cases, num_teste):
+    global FALHA_VALIDACAO
+
     TOLERANCE = 0.03    # Error tolerance in meters
 
     sleep(0.5)
@@ -316,6 +335,7 @@ def dk_validate(test_cases, num_teste):
     for i in range(len(end_diff)):
         if abs(end_diff[i]) > TOLERANCE:
             fail_count += 1
+            FALHA_VALIDACAO = True
             axis = ''
             if(i == 0):
                 axis = 'X'
@@ -377,9 +397,7 @@ def ik_calculate(target_matrix):
     p06y = T_0_6[1, 3]
     acos_th5_param = (p06x*np.sin(theta1 - offset[0])-p06y*np.cos(theta1 - offset[0])-d4)/d6
     assert abs(acos_th5_param) <= 1, "ERRO: Argumento do acos do Theta 5 e maior que 1, solucao invalida"
-    theta5 = np.acos(acos_th5_param)
-
-    theta5 *= -1
+    theta5 = -np.acos(acos_th5_param)
 
     '''
     # Se o pulso estiver pra cima:
@@ -441,12 +459,9 @@ def ik_calculate(target_matrix):
 
     # Calculo do Theta 2
     delta = np.atan2(p14y, p14x)
-    #epsilon = np.acos((p14xy**2 + a2**2 - a3**2)/(2*a2*p14xy))
     epsilon = np.asin((a3*np.sin(theta3))/p14xy)
-    #theta2 = np.atan2(p14y, -p14x) - np.asin((a3*np.sin(theta3))/p14xy) + np.pi/2
     theta2 = delta - epsilon
     theta2 = wrap_angle(theta2 + offset[1])
-    #print(delta, epsilon, delta-epsilon, theta2)
 
     # Calculo de Theta 4
     alpha2 = dh[1, 1]
@@ -459,7 +474,6 @@ def ik_calculate(target_matrix):
     T_3_0 = reverse_transformation_matrix(T_0_3)
     T_0_4 = np.matmul(T_0_6, T_6_4)
     T_3_4 = np.matmul(T_3_0, T_0_4)
-    #print(T_3_4)
     X34x = T_3_4[0, 0]
     X34y = T_3_4[1, 0]
     theta4 = np.atan2(X34y, X34x)
@@ -477,25 +491,18 @@ def ik_calculate(target_matrix):
 
 # Validacao Cinematica Inversa
 def ik_validate(test_cases, num_teste):
-    TOLERANCE_POS = 0.03    # Error tolerance in meters
-    TOLERANCE_ORIENT = 0.03 # Error tolerance in radians
+    global FALHA_VALIDACAO
+
+    TOLERANCE = 0.03    # Error tolerance
 
     sleep(.2)
 
     target_pose = test_cases[num_teste]
     target_matrix = pose2matrix(target_pose)
+    end_effector = sim.getObject("/UR5/JacoHand")
+    
     theta_values = ik_calculate(target_matrix)
     joints = get_joints()
-    end_effector = sim.getObject("/UR5/JacoHand")
-    #end_effector = sim.getObject("/UR5/connection")
-
-    base_matrix = sim.getObjectMatrix(sim.getObject("/UR5"))
-    base_matrix = np.array([base_matrix[0:4],
-                            base_matrix[4:8],
-                            base_matrix[8:12],
-                            [0, 0, 0, 1]])
-
-    fail_count = 0
 
     print(f"========================================================")
     print(f"Validacao Cinematica Inversa - Caso teste {num_teste+1}")
@@ -504,58 +511,29 @@ def ik_validate(test_cases, num_teste):
     for joint, value in zip(joints, theta_values):
         sim.setJointPosition(joint, value)
 
-    end_pose = sim.getObjectPosition(end_effector)
-
-    end_orient = sim.getObjectOrientation(end_effector)
-    end_orient = np.array(sim.alphaBetaGammaToYawPitchRoll(end_orient[0], end_orient[1], end_orient[2]))[::-1]
-
-    if(abs(target_pose[4]) > np.pi/2 + 0.000001):
-        end_orient[0] = wrap_angle(end_orient[0] + np.pi)
-        end_orient[1] = wrap_angle(-end_orient[1] - np.pi)
-        end_orient[2] = wrap_angle(end_orient[2] + np.pi)
+    end_matrix = sim.getObjectMatrix(end_effector)
+    end_matrix = np.array([end_matrix[0:4],
+                           end_matrix[4:8],
+                           end_matrix[8:12],
+                           [0, 0, 0, 1]])
     
-    end_ground = np.array([end_pose, end_orient]).reshape((-1))
-
-    end_diff = np.array([
-                         target_pose[0] - end_ground[0],
-                         target_pose[1] - end_ground[1], 
-                         target_pose[2] - end_ground[2],
-                         target_pose[3] - end_ground[3],
-                         target_pose[4] - end_ground[4], 
-                         target_pose[5] - end_ground[5],
-                         ])
-    print(f"Angulos das Juntas: {theta_values}")
-    print(f"Pose Desejada (X, Y, Z, R, P, Y): {target_pose}")
-    print(f"Truth (X, Y, Z, R, P, Y):         {end_ground}")
-    print(f"Diff (X, Y, Z, R, P, Y):          {end_diff}")
-    for i in range(len(end_diff)):
-        if(i <= 2):
-            if abs(end_diff[i]) > TOLERANCE_POS or np.isnan(end_diff[i]):
-                fail_count += 1
-                axis = ''
-                if(i == 0):
-                    axis = 'X'
-                elif(i == 1):
-                    axis = 'Y'
-                elif(i == 2):
-                    axis = 'Z'
-                print(f"FALHA: Diferenca de posicao do eixo {axis} fora da faixa de tolerancia")
-        else:
-            if abs(end_diff[i]) > TOLERANCE_ORIENT or np.isnan(end_diff[i]):
-                fail_count += 1
-                axis = ''
-                if(i == 3):
-                    axis = 'Roll'
-                elif(i == 4):
-                    axis = 'Pitch'
-                elif(i == 5):
-                    axis = 'Yaw'
-                print(f"FALHA: Diferenca de orientacao ({axis}) fora da faixa de tolerancia")
+    diff_matrix = target_matrix - end_matrix
+    max_diff = abs(np.max(diff_matrix))
+    nan_check = np.max(np.isnan(diff_matrix))
+    
+    print("Pose alvo (X, Y, Z, Alpha, Beta, Gamma):")
+    print(target_pose)
+    print()
+    print("Matriz da diferenca entre alvo e medicao da garra:")
+    print(diff_matrix)
     print(f"--------------------------------------------------------")
-    
-    if(fail_count == 0):
-        print(f"Caso teste {num_teste+1} validado com exito.")
+    #print(end_matrix)
+
+    if max_diff > TOLERANCE or nan_check:
+        FALHA_VALIDACAO = True
+        print(f"Caso teste {num_teste+1} FALHOU com desvios maiores que a tolerancia.")
     else:
-        print(f"Caso teste {num_teste+1} FALHOU com {fail_count} erros.")
+        print(f"Caso teste {num_teste+1} validado com exito.")
+    
     print(f"========================================================")
     print()
