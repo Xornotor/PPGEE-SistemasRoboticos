@@ -19,7 +19,7 @@ np.set_printoptions(suppress=True)
 #-----------------------------------------------#
 SIGNAL = True
 
-DK_VALIDACAO = True # Flag que indica se a validacao da C.D. sera realizada
+DK_VALIDACAO = False # Flag que indica se a validacao da C.D. sera realizada
 IK_VALIDACAO = True # Flag que indica se a validacao da C.I. sera realizada
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 COUNTER_IK = 0 # Contador de casos de teste da C.I. que passaram por validacao
@@ -36,13 +36,15 @@ TESTES_DH = TESTES_DH.reshape(NUM_TESTES_DH, 6)
 # Array de casos de teste da C.I (X, Y, Z, Alpha, Beta, Gamma)
 
 TESTES_IK = []
+
+
 for i in range(10):
     TESTES_IK.append(np.array([0.3*np.sin((i+1)*(0.05)) - 0.4,
                                0.3*np.sin((i+1)*(-0.05)) - 0.3,
                                (i+1)*(0.01) + 1.5,
-                               -2*np.pi/3,
-                               np.pi/7,
-                               3*np.pi/4,
+                               np.pi/3, #-2*np.pi/3,
+                               np.pi/2, #np.pi/7,
+                               np.pi/5 #3*np.pi/4,
                                ]))
     
 for i in range(10):
@@ -53,14 +55,14 @@ for i in range(10):
                                (i+1)*(-0.05) + np.pi/2,
                                (i+1)*(-0.05) - 3*np.pi/4,
                                ]))
-    
+
 for i in range(10):
     TESTES_IK.append(np.array([0.4*np.sin((i+1)*(0.02)) - 0.4,
                                0.4*np.sin((i+1)*(-0.02)) + 0.3,
                                (i+1)*(-0.02) + 1.6,
-                               -np.pi/2,
-                               -np.pi/2,
-                               0,
+                               np.pi/3,
+                               -3*np.pi/5,
+                               np.pi/5,
                                ]))
 
 TESTES_IK = np.array(TESTES_IK)
@@ -92,7 +94,8 @@ def sysCall_sensing():
             COUNTER_DK += 1
     elif((not DK_VALIDACAO) and IK_VALIDACAO):
         if(COUNTER_IK >= NUM_TESTES_IK):
-            IK_VALIDACAO = False
+            #IK_VALIDACAO = False
+            COUNTER_IK = 0
         else:
             ik_validate(TESTES_IK, COUNTER_IK)
             COUNTER_IK += 1
@@ -338,7 +341,7 @@ def dk_validate(test_cases, num_teste):
 def ik_calculate(target_matrix):
     # Inicializacao das variaveis
     theta1 = theta2 = theta3 = theta4 = theta5 = theta6 = 0
-    offset = np.array([np.pi/2, -np.pi/2, 0, -np.pi/2, 0, 0])
+    offset = np.array([np.pi/2, -np.pi/2, 0, -np.pi/2, 0, np.pi/2])
 
     # Obtencao de informacoes para o calculo
     dh = dk_get_dh()
@@ -375,6 +378,8 @@ def ik_calculate(target_matrix):
     acos_th5_param = (p06x*np.sin(theta1 - offset[0])-p06y*np.cos(theta1 - offset[0])-d4)/d6
     assert abs(acos_th5_param) <= 1, "ERRO: Argumento do acos do Theta 5 e maior que 1, solucao invalida"
     theta5 = np.acos(acos_th5_param)
+
+    theta5 *= -1
 
     '''
     # Se o pulso estiver pra cima:
@@ -478,7 +483,7 @@ def ik_validate(test_cases, num_teste):
     sleep(.2)
 
     target_pose = test_cases[num_teste]
-    target_matrix = pose2matrix(target_pose, rpy=False)
+    target_matrix = pose2matrix(target_pose)
     theta_values = ik_calculate(target_matrix)
     joints = get_joints()
     end_effector = sim.getObject("/UR5/JacoHand")
@@ -499,17 +504,17 @@ def ik_validate(test_cases, num_teste):
     for joint, value in zip(joints, theta_values):
         sim.setJointPosition(joint, value)
 
+    end_pose = sim.getObjectPosition(end_effector)
+
     end_orient = sim.getObjectOrientation(end_effector)
-    end_orient = sim.yawPitchRollToAlphaBetaGamma(end_orient[2], end_orient[1], end_orient[0])
+    end_orient = np.array(sim.alphaBetaGammaToYawPitchRoll(end_orient[0], end_orient[1], end_orient[2]))[::-1]
 
-    rot_m = pose2matrix(np.array([0, 0, 0, end_orient[0], end_orient[1], end_orient[2]]), rpy=False)
-    phase_z_m = pose2matrix(np.array([0, 0, 0, 0, 0, np.pi/2]))
-    rot_m = rot_m
-
-    rpy_angles = matrix2pose(rot_m)[3:]
-
-    end_ground = np.array([sim.getObjectPosition(end_effector),
-                          rpy_angles]).reshape((-1))
+    if(abs(target_pose[4]) > np.pi/2 + 0.000001):
+        end_orient[0] = wrap_angle(end_orient[0] + np.pi)
+        end_orient[1] = wrap_angle(-end_orient[1] - np.pi)
+        end_orient[2] = wrap_angle(end_orient[2] + np.pi)
+    
+    end_ground = np.array([end_pose, end_orient]).reshape((-1))
 
     end_diff = np.array([
                          target_pose[0] - end_ground[0],
