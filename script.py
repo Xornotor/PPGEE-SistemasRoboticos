@@ -31,6 +31,8 @@ NUM_TESTES_DH = 20  # Quantidade de casos de teste da C.D.
 
 for i in range(NUM_TESTES_DH):
     TESTES_DH = np.append(TESTES_DH, np.random.randint(-180, 180, 6))
+TESTES_DH = TESTES_DH.reshape((NUM_TESTES_DH, 6))
+TESTES_DH[:, 1] /= 2 
 
 TESTES_DH = TESTES_DH.reshape(NUM_TESTES_DH, 6)
 
@@ -53,8 +55,8 @@ for i in range(10):
                                0.2,
                                1.6,
                                (i+1)*(0.05),
-                               (i+1)*(-0.05) + np.pi/2,
-                               (i+1)*(-0.05) - 3*np.pi/4,
+                               (i+1)*(-0.05) - np.pi/2,
+                               (i+1)*(-0.05) + 3*np.pi/4,
                                ]))
 
 
@@ -69,11 +71,11 @@ for i in range(10):
     
 for i in range(10):
     TESTES_IK.append(np.array([0.5*np.sin((i+1)*(0.04)) + 0.2,
-                               0.3*np.sin((i+1)*(-0.03)) + 0.5,
+                               0.3*np.sin((i+1)*(-0.03)) + 0.6,
                                (i+1)*(-0.02) + 1.6,
                                (i+1)*(0.08) - 2*np.pi/3,
                                (i+1)*(-0.07) + 3*np.pi/4,
-                               (i+1)*(-0.06) - 3*np.pi/5
+                               (i+1)*(-0.06) + 3*np.pi/5
                               ]))
 
 TESTES_IK = np.array(TESTES_IK)
