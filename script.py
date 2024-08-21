@@ -18,8 +18,8 @@ np.set_printoptions(suppress=True)
 #---------------Variaveis Globais---------------#
 #-----------------------------------------------#
 
-DK_VALIDACAO = False # Flag que indica se a validacao da C.D. sera realizada
-IK_VALIDACAO = False # Flag que indica se a validacao da C.I. sera realizada
+DK_VALIDACAO = True # Flag que indica se a validacao da C.D. sera realizada
+IK_VALIDACAO = True # Flag que indica se a validacao da C.I. sera realizada
 FALHA_VALIDACAO = False # Flag que indica que houve alguma falha em alguma validacao
 COUNTER_DK = 0 # Contador de casos de teste da C.D. que passaram por validacao
 COUNTER_IK = 0 # Contador de casos de teste da C.I. que passaram por validacao
@@ -85,6 +85,7 @@ NUM_TESTES_IK = TESTES_IK.shape[0]
 
 COEF_PATH = None
 
+# Targets 1 a 3: Chegar ate o copo
 TARGET1 = np.array([0, -0.5, 1.45, np.pi/2, np.pi/2, 0])
 STEPS1 = 120
 COUNTER_PATH1 = 0
@@ -97,6 +98,7 @@ TARGET3 = np.array([-0.4, -0.5, 1.3, np.pi/2, np.pi/2, -np.pi/2])
 STEPS3 = 60
 COUNTER_PATH3 = 0
 
+#Targets 4 a 6: Levar o copo ate a outra pilastra
 TARGET4 = np.array([-0.4, -0.5, 1.45, np.pi/2, np.pi/2, -np.pi/2])
 STEPS4 = 60
 COUNTER_PATH4 = 0
@@ -105,21 +107,27 @@ TARGET5 = np.array([-0.4, 0.5, 1.45, np.pi/2, np.pi/2, -np.pi/2])
 STEPS5 = 120
 COUNTER_PATH5 = 0
 
-TARGET6 = np.array([-0.4, 0.5, 1.3, np.pi/2, np.pi/2, -np.pi/2])
+TARGET6 = np.array([-0.4, 0.5, 1.25, np.pi/2, np.pi/2, -np.pi/2])
 STEPS6 = 60
 COUNTER_PATH6 = 0
 
+#Targets 7 a 9: Voltar a posicao home
 TARGET7 = np.array([-0.25, 0.5, 1.3, np.pi/2, np.pi/2, -np.pi/2])
 STEPS7 = 120
 COUNTER_PATH7 = 0
 
-TARGET8 = np.array([0, 0.5, 1.45, np.pi/2, np.pi/2, 0])
+TARGET8 = np.array([0, 0.5, 1.45, np.pi/2, np.pi/2, np.pi])
 STEPS8 = 120
 COUNTER_PATH8 = 0
 
 TARGET9 = np.array([0, 0, 0, 0, 0, 0])
 STEPS9 = 120
 COUNTER_PATH9 = 0
+
+# Estado da garra
+
+GRIPPER_GET_CUP = False
+GRIPPER_DROP_CUP = False
 
 #-----------------------------------------------#
 #-------------Interacao CoppeliaSim-------------#
@@ -161,6 +169,7 @@ def sysCall_sensing():
 # Atuacao step-by-step
 def sysCall_actuation():
     global COEF_PATH
+    global GRIPPER_GET_CUP, GRIPPER_DROP_CUP
     global TARGET1, STEPS1, COUNTER_PATH1
     global TARGET2, STEPS2, COUNTER_PATH2
     global TARGET3, STEPS3, COUNTER_PATH3
@@ -171,57 +180,66 @@ def sysCall_actuation():
     global TARGET8, STEPS8, COUNTER_PATH8
     global TARGET9, STEPS9, COUNTER_PATH9
 
-    if(COUNTER_PATH1 <= STEPS1):
-        if(COUNTER_PATH1 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET1)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS1, COUNTER_PATH1)
-        COUNTER_PATH1 += 1
-    elif(COUNTER_PATH2 <= STEPS2):
-        if(COUNTER_PATH2 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET2)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS2, COUNTER_PATH2)
-        COUNTER_PATH2 += 1
-    elif(COUNTER_PATH3 <= STEPS3):
-        if(COUNTER_PATH3 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET3)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS3, COUNTER_PATH3)
-        COUNTER_PATH3 += 1
-    elif(COUNTER_PATH4 <= STEPS4):
-        if(COUNTER_PATH4 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET4)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS4, COUNTER_PATH4)
-        COUNTER_PATH4 += 1
-    elif(COUNTER_PATH5 <= STEPS5):
-        if(COUNTER_PATH5 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET5)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS5, COUNTER_PATH5)
-        COUNTER_PATH5 += 1
-    elif(COUNTER_PATH6 <= STEPS6):
-        if(COUNTER_PATH6 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET6)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS6, COUNTER_PATH6)
-        COUNTER_PATH6 += 1
-    elif(COUNTER_PATH7 <= STEPS7):
-        if(COUNTER_PATH7 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET7)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS7, COUNTER_PATH7)
-        COUNTER_PATH7 += 1
-    elif(COUNTER_PATH8 <= STEPS8):
-        if(COUNTER_PATH8 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET8)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS8, COUNTER_PATH8)
-        COUNTER_PATH8 += 1
-    elif(COUNTER_PATH9 <= STEPS9):
-        if(COUNTER_PATH9 == 0):
-            COEF_PATH = path_get_coef_3order(TARGET9)
-        q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS9, COUNTER_PATH9)
-        COUNTER_PATH9 += 1
-    else:
-        return
+    if((not DK_VALIDACAO) and (not IK_VALIDACAO)):
+        if(COUNTER_PATH1 <= STEPS1):
+            if(COUNTER_PATH1 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET1)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS1, COUNTER_PATH1)
+            COUNTER_PATH1 += 1
+        elif(COUNTER_PATH2 <= STEPS2):
+            if(COUNTER_PATH2 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET2)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS2, COUNTER_PATH2)
+            COUNTER_PATH2 += 1
+        elif(COUNTER_PATH3 <= STEPS3):
+            if(COUNTER_PATH3 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET3)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS3, COUNTER_PATH3)
+            COUNTER_PATH3 += 1
+        elif(GRIPPER_GET_CUP == False):
+            GRIPPER_GET_CUP = True
+            gripper_actuation(False)
+            q_path = read_joints_sensors()
+        elif(COUNTER_PATH4 <= STEPS4):
+            if(COUNTER_PATH4 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET4)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS4, COUNTER_PATH4)
+            COUNTER_PATH4 += 1
+        elif(COUNTER_PATH5 <= STEPS5):
+            if(COUNTER_PATH5 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET5)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS5, COUNTER_PATH5)
+            COUNTER_PATH5 += 1
+        elif(COUNTER_PATH6 <= STEPS6):
+            if(COUNTER_PATH6 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET6)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS6, COUNTER_PATH6)
+            COUNTER_PATH6 += 1
+        elif(GRIPPER_DROP_CUP == False):
+            GRIPPER_DROP_CUP = True
+            gripper_actuation(True)
+            q_path = read_joints_sensors()
+        elif(COUNTER_PATH7 <= STEPS7):
+            if(COUNTER_PATH7 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET7)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS7, COUNTER_PATH7)
+            COUNTER_PATH7 += 1
+        elif(COUNTER_PATH8 <= STEPS8):
+            if(COUNTER_PATH8 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET8)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS8, COUNTER_PATH8)
+            COUNTER_PATH8 += 1
+        elif(COUNTER_PATH9 <= STEPS9):
+            if(COUNTER_PATH9 == 0):
+                COEF_PATH = path_get_coef_3order(TARGET9)
+            q_path = path_instantaneous_joints_3order(COEF_PATH, STEPS9, COUNTER_PATH9)
+            COUNTER_PATH9 += 1
+        else:
+            return
 
-    joints = get_joints()
-    for i, joint in enumerate(joints):
-        sim.setJointPosition(joint, q_path[i])
+        joints = get_joints()
+        for i, joint in enumerate(joints):
+            sim.setJointPosition(joint, q_path[i])
 
 
 #-----------------------------------------------#
@@ -652,5 +670,24 @@ def path_instantaneous_joints_3order(coef_matrix, steps, current_step):
     t = current_step/(steps)
 
     q =  a0 + (a1*t) + (a2*(t**2)) + (a3*(t**3))
-    print(q)
     return q
+
+#-----------------------------------------------#
+#-------Funcoes de Manipulacao de Garra---------#
+#-----------------------------------------------#
+
+def get_gripper_joints():
+    j0=sim.getObject("/UR5/JacoHand/fingers12_motor1")
+    j1=sim.getObject("/UR5/JacoHand/fingers12_motor2")
+    j2=sim.getObject("/UR5/JacoHand/finger3_motor1")
+    j3=sim.getObject("/UR5/JacoHand/finger3_motor2")
+    return [j0, j1, j2, j3]
+
+def gripper_actuation(open):
+    velocity = 0.04
+    gripper_joints = get_gripper_joints()
+    for joint in gripper_joints:
+        if open == True:
+            sim.setJointTargetVelocity(joint, velocity)
+        else:
+            sim.setJointTargetVelocity(joint, -velocity)
