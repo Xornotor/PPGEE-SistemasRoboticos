@@ -518,7 +518,7 @@ def ik_validate(test_cases, num_teste):
                            [0, 0, 0, 1]])
     
     diff_matrix = target_matrix - end_matrix
-    max_diff = abs(np.max(diff_matrix))
+    max_diff = np.max(np.abs(diff_matrix))
     nan_check = np.max(np.isnan(diff_matrix))
     
     print("Pose alvo (X, Y, Z, Alpha, Beta, Gamma):")
